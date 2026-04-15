@@ -256,6 +256,40 @@ class MonteCarloFeatures:
 
         return report
 
+    @staticmethod
+    def get_feature_names(horizons=None):
+        """
+        Return list of MC feature names for given forecast horizons.
+
+        Parameters:
+            horizons (list, optional): List of day horizons to generate
+                feature names for (e.g. [1, 3, 7]). Defaults to [1].
+
+        Returns:
+            list: Feature names in the format mc_{n}d_{statistic}
+        """
+
+        if horizons is None:
+            horizons = [1]
+
+        # statistic suffixes generated per horizon
+        suffixes = [
+            "q1",
+            "q5",
+            "q10",
+            "q50",
+            "q95",
+            "return_pct",
+            "prob_breakeven",
+        ]
+
+        feature_names = []
+        for horizon in horizons:
+            for suffix in suffixes:
+                feature_names.append(f"mc_{horizon}d_{suffix}")
+
+        return feature_names
+
     def print_feature_summary(self, df):
         """
         Print summary statistics of MC features.
@@ -277,3 +311,4 @@ class MonteCarloFeatures:
                 )
             else:
                 print(f"{col:30s}: No valid data")
+                
