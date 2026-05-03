@@ -29,6 +29,7 @@ class MonteCarloFeatures:
         self.iterations = self.config.get("iterations", 1000)
         self.random_seed = self.config.get("random_seed", 42)
         self.min_data_threshold = self.config.get("min_data_threshold", 252)
+        self.price_col = self.config.get("price_col", "close")
         self.features = self.config.get(
             "features",
             [
@@ -165,13 +166,12 @@ class MonteCarloFeatures:
             # Return None on any error - will be handled gracefully
             return None
 
-    def add_mc_features(self, df, price_col="close"):
+    def add_all(self, df):
         """
         Add Monte Carlo features to DataFrame using rolling window.
 
         Parameters:
             df (pd.DataFrame): DataFrame with price data
-            price_col (str): Name of price column to use
 
         Returns:
             pd.DataFrame: DataFrame with MC features added
@@ -190,7 +190,7 @@ class MonteCarloFeatures:
         for idx in range(self.min_data_threshold, len(df_modified)):
             # Get rolling window
             window_start = idx - self.window_size
-            price_window = df_modified[price_col].iloc[window_start:idx]
+            price_window = df_modified[self.price_col].iloc[window_start:idx]
 
             # Calculate features
             features = self.calculate_mc_features_for_window(price_window)
@@ -204,6 +204,18 @@ class MonteCarloFeatures:
                         )
 
         return df_modified
+
+    def add_mc_features(self, df, price_col=None):
+        """
+        Backward-compatible wrapper for older scripts.
+        """
+        original_price_col = self.price_col
+        if price_col is not None:
+            self.price_col = price_col
+        try:
+            return self.add_all(df)
+        finally:
+            self.price_col = original_price_col
 
     def validate_features(self, df):
         """
@@ -219,6 +231,11 @@ class MonteCarloFeatures:
 
         # Count valid rows
         mc_cols = [col for col in df.columns if col.startswith("mc_1d_")]
+        if not mc_cols:
+            report["errors"].append("No Monte Carlo feature columns found")
+            report["nan_rows"] = len(df)
+            return report
+
         valid_mask = df[mc_cols].notna().all(axis=1)
         report["valid_rows"] = valid_mask.sum()
         report["nan_rows"] = len(df) - report["valid_rows"]
@@ -311,4 +328,3 @@ class MonteCarloFeatures:
                 )
             else:
                 print(f"{col:30s}: No valid data")
-                

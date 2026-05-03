@@ -10,6 +10,8 @@ import numpy as np
 import os
 import pandas as pd
 
+from qusa.model.train import prepare_model_features
+
 
 class ModelBacktester:
     """
@@ -73,7 +75,7 @@ class ModelBacktester:
         print("=" * 80)
 
         # 1. Prepare Data
-        x = self.data[self.features].fillna(0)
+        x = prepare_model_features(self.data, self.features)
         predictions = self.model.predict(x)
         probabilities = self.model.predict_proba(x)[:, 1]
 

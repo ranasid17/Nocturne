@@ -15,3 +15,6 @@ scikit-learn
 # modeling
 joblib
 ollama
+
+# testing
+pytest

@@ -7,9 +7,6 @@ data:
   start_date: '2023-12-01'
   end_date: '2025-12-01'
 
-  tickers:
-    - AMZN
-
   paths:
     raw_data_dir: '~/Projects/qusa/data/raw'
     processed_data_dir: '~/Projects/qusa/data/processed'
@@ -145,6 +142,8 @@ defaults:
 pipeline:
   skip_fe: false
   skip_clustering: false
+  skip_training: false
+  skip_evaluation: false
   skip_backtest: false
 
 
@@ -167,4 +166,3 @@ monte_carlo:
     - mc_1d_q95                    # 95th percentile (upside potential)
     - mc_1d_return_pct             # Expected return percentage
     - mc_1d_prob_breakeven         # Probability of positive return
-    

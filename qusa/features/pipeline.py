@@ -3,8 +3,7 @@
 from qusa.features.overnight import OvernightCalculator
 from qusa.features.calendar import CalendarFeatures
 from qusa.features.technical import TechnicalIndicators
-# from qusa.model.monte_carlo_stock_model import MonteCarloStockModel 
-from qusa.features.monte_carlo import MonteCarloFeatures 
+from qusa.features.monte_carlo import MonteCarloFeatures
 
 
 class FeaturePipeline:
@@ -42,8 +41,14 @@ class FeaturePipeline:
 
         # Initialize Monte Carlo features
         mc_config = self.config.get("monte_carlo", {})
-        self.monte_carlo = MonteCarloFeatures(config=mc_config) if mc_config.get("enabled", False) else None
-
+        if mc_config.get("enabled", False):
+            mc_config = {
+                **mc_config,
+                "price_col": self.config.get("close_col", "close"),
+            }
+            self.monte_carlo = MonteCarloFeatures(config=mc_config)
+        else:
+            self.monte_carlo = None
 
     def run(self, df, ticker=None):
         """
@@ -71,9 +76,9 @@ class FeaturePipeline:
         # Step 3) Calculate calendar features
         df_mod = self.calendar_features.add_all(df_mod)
 
-        # Step 4) Calculate Monte Carlo features (if enabled and ticker provided)
-        if self.monte_carlo is not None and ticker is not None:
-            df_mod = self.monte_carlo.add_all(df_mod, ticker)
+        # Step 4) Calculate Monte Carlo features (if enabled)
+        if self.monte_carlo is not None:
+            df_mod = self.monte_carlo.add_all(df_mod)
 
         return df_mod
 

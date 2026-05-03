@@ -1,82 +1,24 @@
-# QUSA/scripts/run_FE_pipeline.py
-
-import logging
+import argparse
 import os
 import pandas as pd
 import sys
-import yaml
-
-from datetime import datetime
+from pathlib import Path
 
 # add parent directory to sys.path for module imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from qusa.features.pipeline import FeaturePipeline
+from qusa.utils.config import load_config
+from qusa.utils.logger import setup_logger
 
 
-def setup_logger(name):
-    """
-    Setup logger with console and file handlers.
-
-    Parameters:
-        1) name (str): Name of the logger.
-
-    Returns:
-        1) logger (logging.Logger): Configured logger object.
-    """
-
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
-    logger.handlers.clear()
-
-    # create log directory if it doesn't exist
-    log_dir = "logs"
-    os.makedirs(log_dir, exist_ok=True)
-
-    # console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run QUSA feature engineering for one ticker."
     )
-    console_handler.setFormatter(console_formatter)
-
-    # file handler
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_handler = logging.FileHandler(f"{log_dir}/fe_pipeline_{timestamp}.log")
-    file_handler.setLevel(logging.DEBUG)
-    file_format = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    file_handler.setFormatter(file_format)
-
-    # add handlers to logger
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
-
-    return logger
-
-
-def load_config(config_path):
-    """
-    Load configuration from YAML file.
-
-    Parameters:
-        1) config_path (str): Path to the configuration YAML file.
-
-    Returns:
-        1) config (dict): Configuration dictionary.
-    """
-
-    try:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-        return config
-
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Configuration file not found at {config_path}")
-    except yaml.YAMLError as e:
-        raise ValueError(f"Error parsing YAML file: {e}")
+    parser.add_argument("ticker", help="Ticker symbol to process, for example AMZN")
+    return parser.parse_args()
 
 
 def validate_dataframe(df, required_columns):
@@ -99,12 +41,42 @@ def validate_dataframe(df, required_columns):
         raise ValueError(f"DataFrame is missing required columns: {missing_columns}")
 
 
+def log_mc_feature_validation(fe_pipeline, processed_data, logger):
+    """
+    Log Monte Carlo feature validation and summary statistics when enabled.
+    """
+
+    mc_calculator = fe_pipeline.monte_carlo
+    if mc_calculator is None:
+        return
+
+    validation = mc_calculator.validate_features(processed_data)
+    logger.info("Monte Carlo feature validation:")
+    logger.info(f"  Total rows: {validation['total_rows']:,}")
+    logger.info(f"  Valid MC rows: {validation['valid_rows']:,}")
+    logger.info(f"  NaN rows (threshold): {validation['nan_rows']:,}")
+
+    if validation["errors"]:
+        for error in validation["errors"]:
+            logger.warning(f"  MC validation warning: {error}")
+    else:
+        logger.info("  No MC validation errors")
+
+    mc_calculator.print_feature_summary(processed_data)
+
+
 def main():
     """
     Main function to run the feature engineering pipeline.
     """
 
-    logger = setup_logger("FE_pipeline")
+    args = parse_args()
+    ticker = args.ticker.upper()
+
+    logger = setup_logger(
+        "FE_pipeline",
+        log_file=str(PROJECT_ROOT / "logs" / "fe_pipeline.log"),
+    )
     logger.info("=" * 80)
     logger.info("Starting Feature Engineering Pipeline")
     logger.info("=" * 80)
@@ -112,7 +84,7 @@ def main():
     try:  # load config file
         logger.info("Loading configuration file...")
 
-        config = load_config("qusa/utils/config.yaml")
+        config = load_config(PROJECT_ROOT / "qusa" / "utils" / "config.yaml")
 
         logger.info("✓ Configuration loaded successfully")
         logger.info(f"  Data directory: {config['data']['paths']['raw_data_dir']}")
@@ -127,12 +99,9 @@ def main():
     try:  # load data
         logger.info("Loading data...")
         data_path = os.path.expanduser(config["data"]["paths"]["raw_data_dir"])
-        tickers = config["data"]["tickers"]
-
-        # for simplicity, process only the first ticker
-        ticker = tickers[0]
-
-        data_path = os.path.join(data_path, f"{ticker}_2023-12-01_2025-12-01.csv")
+        start_date = config["data"]["start_date"]
+        end_date = config["data"]["end_date"]
+        data_path = os.path.join(data_path, f"{ticker}_{start_date}_{end_date}.csv")
 
         # handle case where path to data does not exist
         if not os.path.exists(data_path):
@@ -183,6 +152,7 @@ def main():
         )
 
         processed_data = fe_pipeline.run(data, ticker=ticker)
+        log_mc_feature_validation(fe_pipeline, processed_data, logger)
 
         logger.info("Feature Engineering Pipeline completed successfully.")
         logger.info(f"  Output shape: {processed_data.shape}")

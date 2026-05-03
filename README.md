@@ -91,7 +91,6 @@ POLYGON_API_KEY=your_api_key_here
 
 4. **Configure the project**:
 Edit `qusa/utils/config.yaml` to customize:
-- Stock tickers to analyze
 - Data paths
 - Feature engineering parameters
 - Model hyperparameters
@@ -134,7 +133,7 @@ python scripts/get_most_recent_day.py
 Generate all technical indicators, overnight calculations, and calendar features:
 
 ```bash
-python scripts/run_FE_pipeline.py
+python scripts/run_FE_pipeline.py AMZN
 ```
 
 **Output**: `data/processed/{ticker}_processed.csv` with 30+ engineered features
@@ -144,7 +143,7 @@ python scripts/run_FE_pipeline.py
 Discover market regimes and trading patterns:
 
 ```bash
-python scripts/run_clustering.py
+python scripts/run_clustering.py AMZN
 ```
 
 **Output**:
@@ -155,65 +154,42 @@ python scripts/run_clustering.py
 - `data/processed/{ticker}_processed_clustered.csv` - Labeled data
 - `data/processed/cluster_statistics.json` - Cluster metrics
 
-### 4. Model Training
+### 4. Model Pipeline
 
-Train a decision tree classifier to predict overnight price direction:
+Train, evaluate, and backtest the overnight direction model:
 
 ```bash
-python scripts/model_training.py
+python scripts/run_model_pipeline.py AMZN
 ```
 
 **Output**:
 - `saved_models/{ticker}_model.pkl` - Trained model bundle
 - `data/reports/training/training_report_{ticker}_{timestamp}.txt` (if AI reports enabled)
-
-### 5. Model Evaluation
-
-Evaluate model performance on test data:
-
-```bash
-python scripts/model_evaluation.py
-```
-
-**Output**:
 - Console metrics: accuracy, precision, recall, F1, confusion matrix
 - `data/reports/evaluation/evaluation_report_{ticker}_{timestamp}.txt` (if AI reports enabled)
-
-### 6. Backtesting
-
-Simulate trading strategy with realistic costs:
-
-```bash
-python scripts/model_backtest.py
-```
-
-**Output**:
 - `data/figures/backtest_plot_{ticker}_{timestamp}.png` - Equity curves and draw down
 - `data/figures/backtest_results_{ticker}_{timestamp}.csv` - Trade-by-trade results
 - `data/figures/backtest_metrics_{ticker}_{timestamp}.json` - Performance metrics
 - `data/reports/backtest/backtest_report_{ticker}_{timestamp}.txt` (if AI reports enabled)
 
-### 7. Live Prediction
+Use `pipeline.skip_training`, `pipeline.skip_evaluation`, and `pipeline.skip_backtest`
+in `qusa/utils/config.yaml` to run only selected model stages.
+Pass multiple tickers to process them in one run, for example
+`python scripts/run_model_pipeline.py AMZN AAPL`.
+
+### 5. Live Prediction
 
 Make predictions on the most recent trading day:
 
 ```bash
-python scripts/model_prediction.py
+python scripts/model_prediction.py AMZN
 ```
 
 **Output**:
 - Console prediction with direction, probability, and confidence level
 - `data/predictions/prediction_log.csv` - Historical prediction log
 
-### 8. Full Pipeline
-
-Run the complete workflow (training → evaluation → backtesting):
-
-```bash
-python scripts/run_model_pipeline.py
-```
-
-**Note**: Requires `run_FE_pipeline.py` to be executed first.
+**Note**: Requires `run_FE_pipeline.py` and `run_model_pipeline.py` to be executed first.
 
 ## Data Pipeline
 
@@ -298,9 +274,6 @@ qusa/
     ├── get_most_recent_day.py          # Fetch latest OHLCV from Polygon.io
     ├── run_FE_pipeline.py              # Feature engineering orchestration
     ├── run_clustering.py               # Clustering analysis + visualizations
-    ├── model_training.py               # Train overnight direction model
-    ├── model_evaluation.py             # Evaluate trained model
-    ├── model_backtest.py               # Backtest trading strategy
     ├── model_prediction.py             # Make live predictions
     └── run_model_pipeline.py           # Full modeling workflow
 ```
@@ -311,7 +284,6 @@ Key settings in `qusa/utils/config.yaml`:
 
 ```yaml
 data:
-  tickers: [AMZN]                       # Stocks to analyze
   start_date: '2023-12-01'
   end_date: '2025-12-01'
 

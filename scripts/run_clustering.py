@@ -1,12 +1,11 @@
 # qusa/scripts/run_clustering.py
 
-import logging
+import argparse
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import sys
 
-from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -14,49 +13,15 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from qusa.analysis.clustering import ClusterAnalyzer
 from qusa.utils.config import load_config
+from qusa.utils.logger import setup_logger
 
 
-def setup_logger(name):
-    """
-    Setup logger with console and file handlers.
-
-    Parameters:
-        1) name (str): Name of the logger.
-
-    Returns:
-        1) logger (logging.Logger): Configured logger object.
-    """
-
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
-    logger.handlers.clear()
-
-    # create log directory if it doesn't exist
-    log_dir = "logs"
-    os.makedirs(log_dir, exist_ok=True)
-
-    # console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run QUSA clustering analysis for one ticker."
     )
-    console_handler.setFormatter(console_formatter)
-
-    # file handler
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_handler = logging.FileHandler(f"{log_dir}/clustering_{timestamp}.log")
-    file_handler.setLevel(logging.DEBUG)
-    file_format = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    file_handler.setFormatter(file_format)
-
-    # add handlers to logger
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
-
-    return logger
+    parser.add_argument("ticker", help="Ticker symbol to cluster, for example AMZN")
+    return parser.parse_args()
 
 
 def confirm_directory(path):
@@ -442,7 +407,13 @@ def main():
     Main function to run clustering analysis and visualizations.
     """
 
-    logger = setup_logger("ClusteringPipeline")
+    args = parse_args()
+    ticker = args.ticker.upper()
+
+    logger = setup_logger(
+        "ClusteringPipeline",
+        log_file=str(PROJECT_ROOT / "logs" / "clustering.log"),
+    )
 
     logger.info("=" * 80)
     logger.info("Starting Clustering Analysis Pipeline")
@@ -451,7 +422,7 @@ def main():
     # load config
     try:
         logger.info("Loading configuration...")
-        config = load_config("qusa/utils/config.yaml")
+        config = load_config(PROJECT_ROOT / "qusa" / "utils" / "config.yaml")
         data_cfg = config["data"]
         paths = data_cfg["paths"]
         logger.info("✓ Configuration loaded")
@@ -463,7 +434,6 @@ def main():
     try:
         logger.info("Loading processed data...")
         processed_dir = paths["processed_data_dir"]
-        ticker = data_cfg["tickers"][0]
 
         data_path = os.path.join(processed_dir, f"{ticker}_processed.csv")
         data = pd.read_csv(data_path)

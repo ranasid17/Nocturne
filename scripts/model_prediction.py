@@ -5,6 +5,7 @@
 Make prediction on the most recent trading day.
 """
 
+import argparse
 import pandas as pd
 import sys
 
@@ -18,6 +19,18 @@ sys.path.append(str(PROJECT_ROOT))
 from qusa.model import make_prediction
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Make QUSA predictions for one or more tickers."
+    )
+    parser.add_argument(
+        "tickers",
+        nargs="+",
+        help="Ticker symbol(s) to predict, for example AMZN or AMZN AAPL",
+    )
+    return parser.parse_args()
 
 
 def save_prediction_log(prediction_data, log_file_path):
@@ -49,9 +62,12 @@ def main():
     Main function to make prediction.
     """
 
+    args = parse_args()
+    tickers = [ticker.upper() for ticker in args.tickers]
+
     # 1) set up configuration and logging
     try:
-        config_path = PROJECT_ROOT / "config.yaml"
+        config_path = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
         config = load_config(str(config_path))
 
         log_file = config.get("prediction", {}).get("log_file", "logs/predictions.log")
@@ -65,11 +81,9 @@ def main():
 
     # 2) extract settings
     try:
-        tickers = config["data"]["tickers"]
-
         # store key paths
         model_dir = Path(config["model"]["output"]["model_output_path"]).expanduser()
-        data_dir = Path(config["model"]["output"]["processed_data_dir"]).expanduser()
+        data_dir = Path(config["data"]["paths"]["processed_data_dir"]).expanduser()
 
         # store prediction settings
         should_save = config.get("prediction", {}).get("save", True)

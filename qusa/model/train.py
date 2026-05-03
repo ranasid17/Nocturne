@@ -89,6 +89,14 @@ def get_safe_features(include_monte_carlo=True, mc_horizons=None):
     return list(dict.fromkeys(features))
 
 
+def prepare_model_features(data, feature_names):
+    """
+    Select model features and replace missing or non-finite values.
+    """
+
+    return data[feature_names].replace([float("inf"), -float("inf")], 0).fillna(0)
+
+
 # define leakage features
 CONFOUND_FEATURES = [
     "overnight_delta",  # target feature
@@ -173,8 +181,8 @@ class OvernightDirectionModel:
             2) y (type): fill here
         """
 
-        # filter out non-safe features and fill missing values
-        X = data[self.feature_names].fillna(0)
+        # filter out non-safe features and fill missing/non-finite values
+        X = prepare_model_features(data, self.feature_names)
         y = data["target"]
 
         return X, y
@@ -227,7 +235,7 @@ class OvernightDirectionModel:
 
         # predict labels for test set and store probabilities
         y_pred = self.model.predict(X_test)
-        y_prob = self.model.predict_proba(X_test)[:1]
+        y_prob = self.model.predict_proba(X_test)[:, 1]
 
         # calculate performance metrics and store as attribute
         accuracy = accuracy_score(y_test, y_pred)
