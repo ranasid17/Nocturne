@@ -16,6 +16,8 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 
+from qusa.model.train import prepare_model_features
+
 
 class ModelEvaluator:
     """
@@ -76,8 +78,8 @@ class ModelEvaluator:
         # define target feature
         y_target = (data["target"] > 0).astype(int)
 
-        # extract features and fill missing values
-        X = data[self.features].fillna(0)
+        # extract features and fill missing/non-finite values
+        X = prepare_model_features(data, self.features)
 
         # predict
         y_pred = self.model.predict(X)
@@ -86,9 +88,6 @@ class ModelEvaluator:
         # calculate metrics
         metrics = self._calculate_metrics(y_target, y_pred, y_prob)
         metrics["calibration"] = self._analyze_calibration(y_target, y_prob)
-        self._print_metrics(metrics)
-
-        # print results
         self._print_metrics(metrics)
 
         return metrics
