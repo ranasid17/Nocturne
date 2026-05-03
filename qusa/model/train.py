@@ -13,11 +13,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.tree import DecisionTreeClassifier
 
-# Add Monte Carlo features to SAFE_FEATURES
-# from qusa.features.monte_carlo import MonteCarloFeatures
 
-
-# define allowed features for training
 # define allowed features for training
 SAFE_FEATURES = [
     "52_week_high_proximity",
@@ -58,29 +54,40 @@ SAFE_FEATURES = [
     "mc_1d_prob_breakeven",
 ]
 
+# confirm no duplicate features
+SAFE_FEATURES = list(dict.fromkeys(SAFE_FEATURES))
 
-# Add this function (lazy import to avoid circular imports)
+
 def get_safe_features(include_monte_carlo=True, mc_horizons=None):
     """
-    Return SAFE_FEATURES plus Monte Carlo feature names (imported lazily).
+    Return SAFE_FEATURES plus Monte Carlo feature names for any horizons
+    beyond those already included in the base SAFE_FEATURES list.
+
+    Parameters:
+        include_monte_carlo (bool): Whether to include MC features.
+        mc_horizons (list, optional): Forecast horizons in days. Defaults
+            to [1] inside MonteCarloFeatures.get_feature_names().
+
+    Returns:
+        list: Deduplicated list of safe feature names.
     """
     features = SAFE_FEATURES.copy()
+
     if include_monte_carlo:
         try:
-            mc_horizons = mc_horizons or [1, 3, 7, 15, 30, 45]
             from qusa.features.monte_carlo import MonteCarloFeatures
 
-            features.extend(MonteCarloFeatures.get_feature_names(horizons=mc_horizons))
+            mc_feature_names = MonteCarloFeatures.get_feature_names(
+                horizons=mc_horizons
+            )
+            features.extend(mc_feature_names)
         except Exception:
             # If import fails, return base features only
             pass
 
-    # remove duplicates while preserving order
+    # deduplicate while preserving order
     return list(dict.fromkeys(features))
 
-
-# confirm no duplicate features
-SAFE_FEATURES = list(dict.fromkeys(SAFE_FEATURES))
 
 # define leakage features
 CONFOUND_FEATURES = [
