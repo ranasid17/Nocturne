@@ -157,6 +157,7 @@ monte_carlo:
   iterations: 1000                 # Number of simulation paths per day
   random_seed: 42                  # Fixed seed for reproducibility
   min_data_threshold: 252          # Start calculating after this many rows
+  horizons: [1]                    # Forecast horizons in days (must match computed features)
 
   features:                        # Which MC statistics to generate
     - mc_1d_q1                     # 1st percentile (extreme downside)
@@ -166,3 +167,4 @@ monte_carlo:
     - mc_1d_q95                    # 95th percentile (upside potential)
     - mc_1d_return_pct             # Expected return percentage
     - mc_1d_prob_breakeven         # Probability of positive return
+    
