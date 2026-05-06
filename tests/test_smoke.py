@@ -140,7 +140,7 @@ def test_model_pipeline_honors_skip_flags(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["run_model_pipeline.py", "TEST"],
+        ["run_model_pipeline.py", "--ticker", "TEST"],
     )
     monkeypatch.setattr(run_model_pipeline, "load_config", lambda _path: config)
     monkeypatch.setattr(
@@ -220,6 +220,102 @@ def test_polygon_fetcher_latest_day_raises_on_non_ok_status(monkeypatch):
             fetcher.fetch_latest_day("AMZN")
 
 
+def test_polygon_fetcher_historical_range(monkeypatch):
+    """fetch_historical_range returns multiple rows from Polygon aggregates."""
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+
+    from qusa.data.fetcher import PolygonFetcher
+
+    fake_aggs = {
+        "status": "OK",
+        "ticker": "AMZN",
+        "results": [
+            {"t": 1714924800000, "o": 180.0, "h": 182.0, "l": 179.0, "c": 181.0, "v": 1000000},
+            {"t": 1715011200000, "o": 181.0, "h": 183.0, "l": 180.0, "c": 182.0, "v": 1100000},
+        ],
+        "resultsCount": 2
+    }
+
+    with patch("qusa.data.fetcher.requests.get", return_value=_mock_response(fake_aggs)):
+        fetcher = PolygonFetcher()
+        df = fetcher.fetch_historical_range("AMZN", "2024-05-01", "2024-05-02")
+
+    assert len(df) == 2
+    assert "date" in df.columns
+    assert df["close"].iloc[1] == 182.0
+
+
+def test_polygon_fetcher_n_days(monkeypatch):
+    """fetch_n_days returns exactly N rows if available."""
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+
+    from qusa.data.fetcher import PolygonFetcher
+
+    # Mocking historical_range to return 5 rows
+    results = [
+        {"t": 1714924800000 + i * 86400000, "o": 180 + i, "h": 182 + i, "l": 179 + i, "c": 181 + i, "v": 1000000}
+        for i in range(5)
+    ]
+    fake_aggs = {"status": "OK", "results": results, "resultsCount": 5}
+
+    with patch("qusa.data.fetcher.requests.get", return_value=_mock_response(fake_aggs)):
+        fetcher = PolygonFetcher()
+        df = fetcher.fetch_n_days("AMZN", 3)
+
+    assert len(df) == 3
+    assert df["close"].iloc[-1] == 181 + 4  # Tail(3) of 5 rows (0,1,2,3,4) is (2,3,4)
+
+
+def test_polygon_fetcher_latest_day_delayed_status(monkeypatch):
+    """fetch_latest_day succeeds even if status is 'DELAYED'."""
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+
+    from qusa.data.fetcher import PolygonFetcher
+
+    delayed_response = FAKE_OPEN_CLOSE.copy()
+    delayed_response["status"] = "DELAYED"
+
+    with patch("qusa.data.fetcher.requests.get", return_value=_mock_response(delayed_response)):
+        fetcher = PolygonFetcher()
+        df = fetcher.fetch_latest_day("AMZN")
+
+    assert len(df) == 1
+    assert df["close"].iloc[0] == pytest.approx(186.75)
+
+
+def test_data_loader_consolidate_history(tmp_path):
+    """consolidate_history merges multiple files and archives them."""
+    from qusa.data.loader import DataLoader
+    
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    
+    # Create two overlapping files
+    df1 = pd.DataFrame({
+        "date": ["2024-01-01", "2024-01-02"],
+        "open": [100, 101], "high": [102, 103], "low": [99, 100], "close": [101, 102], "volume": [1000, 1100]
+    })
+    df2 = pd.DataFrame({
+        "date": ["2024-01-02", "2024-01-03"],
+        "open": [101, 102], "high": [103, 104], "low": [100, 101], "close": [102, 103], "volume": [1100, 1200]
+    })
+    
+    df1.to_csv(raw_dir / "AMZN_2024-01-01_2024-01-02.csv", index=False)
+    df2.to_csv(raw_dir / "AMZN_2024-01-02_2024-01-03.csv", index=False)
+    
+    loader = DataLoader(raw_data_dir=str(raw_dir))
+    consolidated = loader.consolidate_history("AMZN")
+    
+    # Should have 3 unique days
+    assert len(consolidated) == 3
+    assert (raw_dir / "AMZN_history.csv").exists()
+    
+    # Source files should be archived
+    assert not (raw_dir / "AMZN_2024-01-01_2024-01-02.csv").exists()
+    assert (raw_dir / "archive" / "AMZN_2024-01-01_2024-01-02.csv").exists()
+    assert (raw_dir / "archive" / "AMZN_2024-01-02_2024-01-03.csv").exists()
+
+
 def test_data_loader_merges_latest_onto_history(monkeypatch, tmp_path):
     """
     load_most_recent merges the fetched latest row onto an existing
@@ -261,7 +357,7 @@ def test_data_loader_merges_latest_onto_history(monkeypatch, tmp_path):
     assert merged["date"].is_monotonic_increasing
 
     # The latest close should appear
-    assert pytest.approx(186.75) in merged["close"].values
+    assert (merged["close"] == 186.75).any()
 
 
 def test_data_loader_no_history_returns_latest_only(monkeypatch, tmp_path):
