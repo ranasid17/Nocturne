@@ -47,7 +47,7 @@ class StrategyReporter:
             defaults_config = config.get("defaults", {}).get("reporter", {})
 
             # set parameters as attributes
-            self.model_name = model_name or llm_config.get("model", "gemma3:4b")
+            self.model_name = model_name or llm_config.get("model", "gemma4:e4b")
             self.base_url = base_url or llm_config.get(
                 "base_url", "http://localhost:11434"
             )

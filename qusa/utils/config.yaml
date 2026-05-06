@@ -79,7 +79,7 @@ reporting:
   enabled: true                           # Master switch to enable/disable AI reports
 
   llm:
-    model: "gemma3:4b"                    # Ollama model to use
+    model: "gemma4:e4b"                   # Ollama model to use
     base_url: "http://localhost:11434"    # Ollama API endpoint
     temperature: 0.3                      # Sampling temperature (0.0-1.0)
     max_tokens: 1000                      # Maximum response tokens
