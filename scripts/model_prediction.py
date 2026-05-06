@@ -12,11 +12,12 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from qusa.model import make_prediction
+from qusa.data.loader import DataLoader
+from qusa.features.pipeline import FeaturePipeline
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
 
@@ -26,9 +27,17 @@ def parse_args():
         description="Make QUSA predictions for one or more tickers."
     )
     parser.add_argument(
-        "tickers",
+        "-ticker", "--ticker",
+        "--tickers",
+        dest="tickers",
         nargs="+",
-        help="Ticker symbol(s) to predict, for example AMZN or AMZN AAPL",
+        required=True,
+        help="Ticker symbol(s) to predict, for example -ticker AMZN AAPL",
+    )
+    parser.add_argument(
+        "--fetch",
+        action="store_true",
+        help="Fetch latest data and run feature engineering before prediction.",
     )
     return parser.parse_args()
 
@@ -44,14 +53,10 @@ def save_prediction_log(prediction_data, log_file_path):
 
     log_path = Path(log_file_path).expanduser()
 
-    # convert dict to DataFrame
     prediction = pd.DataFrame([prediction_data])
 
     try:
-        # create log directory if does not exist
         log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # append prediction to log file (only write header when file not found)
         prediction.to_csv(log_path, mode="a", header=not log_path.exists(), index=False)
     except Exception as e:
         raise IOError(f"Failed to save prediction to {log_file_path}: {e}")
@@ -63,9 +68,8 @@ def main():
     """
 
     args = parse_args()
-    tickers = [ticker.upper() for ticker in args.tickers]
+    tickers = [t.upper() for t in args.tickers]
 
-    # 1) set up configuration and logging
     try:
         config_path = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
         config = load_config(str(config_path))
@@ -79,13 +83,10 @@ def main():
         print(f"✗ Configuration file not found: {e}")
         sys.exit(1)
 
-    # 2) extract settings
     try:
-        # store key paths
         model_dir = Path(config["model"]["output"]["model_output_path"]).expanduser()
         data_dir = Path(config["data"]["paths"]["processed_data_dir"]).expanduser()
 
-        # store prediction settings
         should_save = config.get("prediction", {}).get("save", True)
         prediction_log_file = config.get("prediction", {}).get("log_file")
 
@@ -93,7 +94,6 @@ def main():
         logger.error(f"✗ Missing configuration key: {e}")
         sys.exit(1)
 
-    # 3) main prediction loop
     success_count = 0
 
     for ticker in tickers:
@@ -101,28 +101,55 @@ def main():
         logger.info(f"Processing Ticker: {ticker}")
 
         try:
-            # build dynamic paths from pre-defined structure
             model_path = model_dir / f"{ticker.lower()}_model.pkl"
-            data_path = data_dir / f"{ticker}_processed.csv"
+            processed_data_path = data_dir / f"{ticker}_processed.csv"
 
-            # validate paths before calling prediction
+            # ---------------------------------------------------------
+            # Automated Fetching and Feature Engineering
+            # ---------------------------------------------------------
+            if args.fetch:
+                logger.info(f"--fetch enabled: preparing data for {ticker}...")
+                
+                # 1. Fetch latest data
+                raw_data_dir = config["data"]["paths"]["raw_data_dir"]
+                loader = DataLoader(raw_data_dir=raw_data_dir)
+                raw_data = loader.load_most_recent(
+                    ticker, 
+                    start=config["data"]["start_date"], 
+                    end=config["data"]["end_date"]
+                )
+                
+                # 2. Run feature engineering
+                fe_pipeline = FeaturePipeline({
+                    "date_col": "date",
+                    "open_col": "open",
+                    "close_col": "close",
+                    "high_col": "high",
+                    "low_col": "low",
+                    "volume_col": "volume",
+                    "overnight": {"abnormal_threshold": config["analysis"]["abnormal_threshold"]},
+                    "technical_params": config["features"],
+                    "monte_carlo": config.get("monte_carlo", {}),
+                })
+                processed_data = fe_pipeline.run(raw_data, ticker=ticker)
+                
+                # 3. Save processed data for prediction
+                processed_data.to_csv(processed_data_path, index=False)
+                logger.info(f"✓ Data prepared and saved to {processed_data_path}")
+
             if not model_path.exists():
                 logger.warning(f"Skipping {ticker}: Model not found at {model_path}")
-                continue  # skip to next ticker
-            if not data_path.exists():
-                logger.warning(f"Skipping {ticker}: Data not found at {data_path}")
-                continue  # skip to next ticker
+                continue
+            if not processed_data_path.exists():
+                logger.warning(f"Skipping {ticker}: Data not found at {processed_data_path}")
+                continue
 
-            # Make Prediction
-            ## Note: make_prediction prints to stdout internally,
-            ##       but capture the return dict for logging.
             logger.info(
-                f"Predicting using model at {model_path} and data at {data_path}"
+                f"Predicting using model at {model_path} and data at {processed_data_path}"
             )
-            prediction = make_prediction(str(model_path), str(data_path))
+            prediction = make_prediction(str(model_path), str(processed_data_path))
             logger.info(f"Prediction for {ticker}: {prediction}")
 
-            # Enrich result with metadata for the CSV log
             log_entry = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "ticker": ticker,
@@ -133,12 +160,10 @@ def main():
                 "confidence": prediction.get("confidence"),
             }
 
-            # log result to console
             logger.info(
                 f"Prediction for {ticker}: {prediction.get('direction')} ({prediction.get('confidence')} Confidence)"
             )
 
-            # save prediction log if enabled
             if should_save and prediction_log_file:
                 save_prediction_log(log_entry, prediction_log_file)
                 logger.info(f"Prediction appended to log: {prediction_log_file}")
@@ -149,7 +174,6 @@ def main():
             logger.error(f"✗ Error processing {ticker}: {e}")
             continue
 
-    # 4) summary
     logger.info(f"{'=' * 40}")
     logger.info(f"Prediction Job Complete. Successful: {success_count}/{len(tickers)}")
 
@@ -158,3 +182,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+    

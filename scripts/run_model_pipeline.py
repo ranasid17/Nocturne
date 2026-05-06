@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qusa/scripts/run_model_pipeline.py
+# qusa/qusa/scripts/run_model_pipeline.py
 
 """
 Master model pipeline orchestrator for QUSA.
@@ -37,9 +37,13 @@ def parse_args():
         description="Run QUSA model training, evaluation, and backtesting."
     )
     parser.add_argument(
-        "tickers",
+        "-ticker",
+        "--ticker",
+        "--tickers",
+        dest="tickers",
         nargs="+",
-        help="Ticker symbol(s) to process, for example AMZN or AMZN AAPL",
+        required=True,
+        help="Ticker symbol(s) to process, for example -ticker AMZN AAPL",
     )
     return parser.parse_args()
 
@@ -292,7 +296,7 @@ def main():
     """
 
     args = parse_args()
-    tickers = [ticker.upper() for ticker in args.tickers]
+    tickers = [t.upper() for t in args.tickers]
 
     try:
         config_path = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"

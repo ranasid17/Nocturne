@@ -20,7 +20,11 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Run QUSA clustering analysis for one ticker."
     )
-    parser.add_argument("ticker", help="Ticker symbol to cluster, for example AMZN")
+    parser.add_argument(
+        "-ticker", "--ticker",
+        required=True,
+        help="Ticker symbol to cluster, for example -ticker AMZN",
+    )
     return parser.parse_args()
 
 
@@ -112,10 +116,8 @@ def plot_pca_clusters(data, pca_X, pca_model, paths, logger):
 
     logger.info("Generating PCA cluster plot...")
 
-    # copy data for plotting
     data_filtered = data.loc[data["cluster"] != -1].copy()
 
-    # plotting code
     fig, ax = plt.subplots(figsize=(12, 6))
     scatter = ax.scatter(
         pca_X[:, 0],
@@ -124,11 +126,11 @@ def plot_pca_clusters(data, pca_X, pca_model, paths, logger):
         cmap="tab10",
         alpha=0.7,
     )
-    cbar = plt.colorbar(scatter, ax=ax)  # add colorbar
+    cbar = plt.colorbar(scatter, ax=ax)
     cbar.set_label("Cluster Label", fontsize=12)
 
-    var1 = pca_model.explained_variance_ratio_[0] * 100  # percentage variance for PC1
-    var2 = pca_model.explained_variance_ratio_[1] * 100  # percentage variance for PC2
+    var1 = pca_model.explained_variance_ratio_[0] * 100
+    var2 = pca_model.explained_variance_ratio_[1] * 100
 
     ax.set_xlabel(f"Principal Component 1 ({var1:.2f}% Variance)", fontsize=12)
     ax.set_ylabel(f"Principal Component 2 ({var2:.2f}% Variance)", fontsize=12)
@@ -159,22 +161,18 @@ def plot_cluster_profiles(analyzer, paths, logger):
 
     profiles = analyzer.cluster_profiles
 
-    # select feature columns
     feature_cols = [
         col for col in profiles.columns if col not in ["cluster", "count", "percent"]
     ]
 
-    # prepare data for heatmap
     heatmap_data = profiles[feature_cols].T
     heatmap_data.columns = [f"Cluster {int(col)}" for col in profiles["cluster"]]
 
-    # clean feature names
     heatmap_data.index = [
         col.replace("_mean", "").replace("_", " ").title() for col in heatmap_data.index
     ]
 
-    # plotting code
-    fig_height = max(6, 0.5 * len(heatmap_data))  # dynamic figure height by map size
+    fig_height = max(6, 0.5 * len(heatmap_data))
     fig, ax = plt.subplots(figsize=(12, fig_height))
     cax = ax.matshow(heatmap_data, cmap="viridis", aspect="auto")
     fig.colorbar(cax)
@@ -204,16 +202,11 @@ def plot_cluster_time_series(data, paths, logger):
 
     logger.info("Generating cluster time series plots...")
 
-    # copy data for plotting
     data_filtered = data.loc[data["cluster"] != -1].copy()
-
-    # convert timestamp to datetime if not already
     data_filtered["date"] = pd.to_datetime(data_filtered["date"])
 
-    # plotting code
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
-    ## plot 1: overnight delta vs cluster
     scatter = ax1.scatter(
         data_filtered["date"],
         data_filtered["overnight_delta"],
@@ -221,25 +214,21 @@ def plot_cluster_time_series(data, paths, logger):
         cmap="tab10",
         alpha=0.7,
     )
-    cbar1 = plt.colorbar(scatter, ax=ax1)  # add colorbar for clusters
+    cbar1 = plt.colorbar(scatter, ax=ax1)
     cbar1.set_label("Cluster Label", fontsize=12)
 
     ax1.axhline(y=0, color="gray", linestyle="--", linewidth=1)
-
     ax1.set_xlabel("date", fontsize=12)
     ax1.set_ylabel("Overnight Delta", fontsize=12)
     ax1.set_title("Overnight Delta vs Time by Cluster", fontsize=14, fontweight="bold")
 
-    ## plot 2: cluster distribution over time
-    data_filtered["month"] = data_filtered["date"].dt.to_period("M")  # label months
+    data_filtered["month"] = data_filtered["date"].dt.to_period("M")
     cluster_counts = (
-        data_filtered.groupby(["month", "cluster"])  # group by month and cluster
+        data_filtered.groupby(["month", "cluster"])
         .size()
         .unstack(fill_value=0)
     )
-    cluster_props = cluster_counts.div(  # normalize to get proportions
-        cluster_counts.sum(axis=1), axis=0
-    )
+    cluster_props = cluster_counts.div(cluster_counts.sum(axis=1), axis=0)
 
     cluster_props.plot(kind="area", stacked=True, ax=ax2, colormap="tab10", alpha=0.7)
     ax2.set_xlabel("Month", fontsize=12)
@@ -289,7 +278,6 @@ def analyze_clusters(data, analyzer, logger):
         logger.info("-" * 80)
         logger.info(f"Size: {size} days ({pct:.1f}%)")
 
-        # Overnight delta
         logger.info("Overnight Delta:")
         logger.info(
             f"  Mean: {cluster_data['overnight_delta_pct'].mean():.2f}% | "
@@ -297,14 +285,12 @@ def analyze_clusters(data, analyzer, logger):
             f"Std: {cluster_data['overnight_delta_pct'].std():.2f}%"
         )
 
-        # Volume
         logger.info("Volume:")
         logger.info(
             f"  Mean Ratio: {cluster_data['volume_ratio'].mean():.2f}x | "
             f"Spikes (>2x): {(cluster_data['volume_spike']).sum()} days"
         )
 
-        # RSI
         logger.info("RSI:")
         logger.info(
             f"  Mean: {cluster_data['rsi'].mean():.1f} | "
@@ -312,21 +298,17 @@ def analyze_clusters(data, analyzer, logger):
             f"Overbought (>70): {(cluster_data['rsi'] > 70).sum()}"
         )
 
-        # Abnormal moves
         if "abnormal" in cluster_data.columns:
             abnormal_rate = cluster_data["abnormal"].mean() * 100
             logger.info(f"Abnormal Overnight Moves: {abnormal_rate:.1f}%")
 
-        # Day-of-week effects
         if "day_of_week" in cluster_data.columns:
             logger.info("Day of Week Distribution:")
             dow_map = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri"}
-
             dow_dist = (
                 cluster_data["day_of_week"].value_counts(normalize=True).sort_index()
                 * 100
             )
-
             for dow, pct in dow_dist.items():
                 if dow in dow_map:
                     logger.info(f"  {dow_map[dow]}: {pct:.1f}%")
@@ -340,7 +322,7 @@ def analyze_clusters(data, analyzer, logger):
 
 def export_cluster_statistics(data, analyzer, paths, logger):
     """
-    Export cluster statistics to a CSV file.
+    Export cluster statistics to a JSON file.
 
     Parameters:
         1) data (pd.DataFrame): Dataset with cluster labels.
@@ -351,12 +333,6 @@ def export_cluster_statistics(data, analyzer, paths, logger):
 
     logger.info("Exporting cluster statistics to CSV...")
 
-    if hasattr(analyzer, "cluster_profiles"):
-        cluster_profiles = analyzer.cluster_profiles.copy()
-    else:
-        cluster_profiles = pd.DataFrame()
-
-    # aggregate additional stats
     cluster_statistics = []
 
     for cluster_label in sorted(data["cluster"].unique()):
@@ -394,7 +370,6 @@ def export_cluster_statistics(data, analyzer, paths, logger):
 
     df_cluster_stats = pd.DataFrame(cluster_statistics)
 
-    # Save JSON
     json_path = os.path.join(paths["processed_data_dir"], "cluster_statistics.json")
     df_cluster_stats.to_json(json_path, orient="records", indent=4)
     logger.info(f"✓ Cluster stats exported to JSON → {json_path}")
@@ -419,14 +394,12 @@ def main():
     logger.info("Starting Clustering Analysis Pipeline")
     logger.info("=" * 80)
 
-    # load config
     try:
         logger.info("Loading configuration...")
         config = load_config(PROJECT_ROOT / "qusa" / "utils" / "config.yaml")
         data_cfg = config["data"]
         paths = data_cfg["paths"]
         logger.info("✓ Configuration loaded")
-
     except Exception as e:
         logger.error(f"✗ Failed to load config: {e}")
         return 1
@@ -434,11 +407,9 @@ def main():
     try:
         logger.info("Loading processed data...")
         processed_dir = paths["processed_data_dir"]
-
         data_path = os.path.join(processed_dir, f"{ticker}_processed.csv")
         data = pd.read_csv(data_path)
         logger.info(f"✓ Data loaded: {data.shape}")
-
     except Exception as e:
         logger.error(f"✗ Failed to load processed data: {e}")
         return 1
@@ -452,13 +423,11 @@ def main():
         optimal_results = analyzer.find_optimal_clusters(data, max_k=8)
         logger.info(f"✓ Optimal k = {optimal_results['optimal_k']}")
 
-        # plot cluster elbow curve
         plot_elbow_curve(optimal_results, paths, logger)
 
         data_clustered = analyzer.fit_clusters(data, feature_cols=None)
         logger.info("✓ Clustering complete")
 
-        # apply PCA for visualization
         pca_X, pca_model = analyzer.perform_pca(
             data_clustered,
             feature_cols=analyzer.feature_columns,
@@ -466,12 +435,12 @@ def main():
         logger.info(
             f"✓ PCA explained variance: {pca_model.explained_variance_ratio_.sum():.1%}"
         )
-        # visualizations
+
         plot_pca_clusters(data_clustered, pca_X, pca_model, paths, logger)
         plot_cluster_profiles(analyzer, paths, logger)
         plot_cluster_time_series(data_clustered, paths, logger)
 
-        try:  # detailed cluster analysis
+        try:
             analyze_clusters(data=data_clustered, analyzer=analyzer, logger=logger)
         except Exception as e:
             logger.error(f"Cluster analysis failed: {e}")
@@ -481,13 +450,13 @@ def main():
         logger.exception(f"✗ Error during clustering analysis: {e}")
         return 1
 
-    try:  # save cluster statistics
+    try:
         export_cluster_statistics(data_clustered, analyzer, paths, logger)
     except Exception as e:
         logger.error(f"Failed to export cluster stats: {e}")
         logger.exception("Full traceback:")
 
-    try:  # save clustered data
+    try:
         logger.info("Saving clustered data...")
         output_path = os.path.join(
             paths["processed_data_dir"],
@@ -495,7 +464,6 @@ def main():
         )
         data_clustered.to_csv(output_path, index=False)
         logger.info(f"✓ Clustered data saved → {output_path}")
-
     except Exception as e:
         logger.error(f"✗ Failed to save clustered data: {e}")
         return 1

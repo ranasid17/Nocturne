@@ -1,3 +1,5 @@
+# qusa/scripts/run_FE_pipeline.py
+
 import argparse
 import os
 import pandas as pd
@@ -18,35 +20,22 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Run QUSA feature engineering for one ticker."
     )
-    parser.add_argument("ticker", help="Ticker symbol to process, for example AMZN")
+    # Standardized ticker flag with -ticker alias
+    parser.add_argument(
+        "-ticker", "--ticker", 
+        required=True, 
+        help="Ticker symbol to process, for example AMZN"
+    )
     parser.add_argument(
         "--fetch",
         action="store_true",
         help=(
-            "Fetch the most recent trading day from Polygon.io and merge it "
-            "onto the historical CSV before running feature engineering. "
+            "Fetch the most recent trading day and merge it "
+            "into history before running feature engineering. "
             "Requires POLYGON_API_KEY env var."
         ),
     )
     return parser.parse_args()
-
-
-def validate_dataframe(df, required_columns):
-    """
-    Validate that the DataFrame contains all required columns.
-
-    Parameters:
-        1) df (pd.DataFrame): DataFrame to validate.
-        2) required_columns (list): List of required column names.
-
-    Raises:
-        1) ValueError: If any required column is missing.
-    """
-
-    missing_columns = set(required_columns) - set(df.columns)
-
-    if missing_columns:
-        raise ValueError(f"DataFrame is missing required columns: {missing_columns}")
 
 
 def log_mc_feature_validation(fe_pipeline, processed_data, logger):
@@ -93,66 +82,33 @@ def main():
         logger.info("Loading configuration file...")
         config = load_config(PROJECT_ROOT / "qusa" / "utils" / "config.yaml")
         logger.info("✓ Configuration loaded successfully")
-        logger.info(f"  Data directory: {config['data']['paths']['raw_data_dir']}")
-        logger.info(
-            f"  Output directory: {config['data']['paths']['processed_data_dir']}"
-        )
     except Exception as e:
         logger.error(f"✗ Error loading configuration: {e}")
         return 1
 
-    required_columns = [
-        config.get("fe_params", {}).get("date_col", "date"),
-        config.get("fe_params", {}).get("open_col", "open"),
-        config.get("fe_params", {}).get("close_col", "close"),
-        config.get("fe_params", {}).get("high_col", "high"),
-        config.get("fe_params", {}).get("low_col", "low"),
-        config.get("fe_params", {}).get("volume_col", "volume"),
-    ]
-
     raw_data_dir = os.path.expanduser(config["data"]["paths"]["raw_data_dir"])
-    start_date = config["data"]["start_date"]
-    end_date = config["data"]["end_date"]
+    loader = DataLoader(raw_data_dir=raw_data_dir)
 
     # ------------------------------------------------------------------
-    # Data loading: --fetch path vs. local CSV path
+    # Data loading: Unified History Strategy
     # ------------------------------------------------------------------
-    if args.fetch:
-        try:
-            logger.info(
-                f"--fetch flag set: pulling latest day from Polygon.io for {ticker}..."
-            )
-            loader = DataLoader(raw_data_dir=raw_data_dir)
-            data = loader.load_most_recent(ticker, start=start_date, end=end_date)
-            logger.info(
-                f"✓ Merged dataset ready: {len(data)} rows "
-                f"(historical + latest day)"
-            )
-        except Exception as e:
-            logger.error(f"✗ Error fetching data from Polygon: {e}")
-            return 1
-    else:
-        try:
-            logger.info("Loading data from local CSV...")
-            data_path = os.path.join(
-                raw_data_dir, f"{ticker}_{start_date}_{end_date}.csv"
-            )
-
-            if not os.path.exists(data_path):
-                raise FileNotFoundError(f"Data file not found at {data_path}")
-
-            data = pd.read_csv(data_path)
-            logger.info("✓ Data loaded successfully")
-        except Exception as e:
-            logger.error(f"✗ Error loading data: {e}")
-            return 1
-
     try:
-        logger.info("Validating input DataFrame...")
-        validate_dataframe(data, required_columns)
-        logger.info("✓ Input DataFrame validation successful")
+        if args.fetch:
+            logger.info(f"--fetch flag set: pulling latest day for {ticker}...")
+            data = loader.load_most_recent(ticker)
+            logger.info(f"✓ Latest data prepared: {len(data)} rows")
+        else:
+            logger.info(f"Locating historical data for {ticker}...")
+            # Automatically consolidates any fragmented files found
+            data = loader.consolidate_history(ticker)
+            
+            if data.empty:
+                logger.error(f"✗ No historical data found for {ticker} in {raw_data_dir}")
+                return 1
+                
+            logger.info(f"✓ Data loaded successfully: {len(data)} rows")
     except Exception as e:
-        logger.error(f"✗ DataFrame validation error: {e}")
+        logger.error(f"✗ Error loading data: {e}")
         return 1
 
     try:
@@ -179,7 +135,6 @@ def main():
 
         logger.info("Feature Engineering Pipeline completed successfully.")
         logger.info(f"  Output shape: {processed_data.shape}")
-        logger.info(f"  Features added: {processed_data.shape[1] - data.shape[1]}")
 
     except Exception as e:
         logger.error(f"✗ Error during Feature Engineering: {e}")
@@ -194,8 +149,6 @@ def main():
         os.makedirs(processed_dir, exist_ok=True)
 
         output_path = os.path.join(processed_dir, f"{ticker}_processed.csv")
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
         processed_data.to_csv(output_path, index=False)
         logger.info(f"✓ Processed data saved to {output_path}")
 
@@ -206,12 +159,10 @@ def main():
     logger.info("=" * 80)
     logger.info("Pipeline Execution Summary")
     logger.info("=" * 80)
-    logger.info(f"  Source: {'Polygon.io (--fetch)' if args.fetch else data_path}")
+    logger.info(f"  Ticker: {ticker}")
+    logger.info(f"  Source: {raw_data_dir}/{ticker}_history.csv")
     logger.info(f"  Output: {output_path}")
     logger.info(f"  Rows processed: {len(processed_data)}")
-    logger.info(
-        f"  Features created: {len(fe_pipeline.get_engineered_features(include_monte_carlo=config.get('monte_carlo', {}).get('enabled', False), mc_horizons=config.get('monte_carlo', {}).get('horizons', None)))}"
-    )
     logger.info("=" * 80)
     logger.info("✓ Pipeline completed successfully!")
     logger.info("=" * 80)
@@ -222,4 +173,3 @@ def main():
 if __name__ == "__main__":
     exit_code = main()
     sys.exit(exit_code)
-    
