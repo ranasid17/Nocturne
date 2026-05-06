@@ -1,5 +1,10 @@
+# qusa/tests/test_smoke.py
+
 import importlib
+import os
+import pytest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
@@ -11,6 +16,10 @@ from qusa.utils.config import load_config
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+
+# ---------------------------------------------------------------------------
+# Existing tests (unchanged)
+# ---------------------------------------------------------------------------
 
 def test_config_loads_pipeline_skip_flags():
     config = load_config(PROJECT_ROOT / "qusa" / "utils" / "config.yaml")
@@ -144,3 +153,174 @@ def test_model_pipeline_honors_skip_flags(monkeypatch, tmp_path):
     monkeypatch.setattr(run_model_pipeline, "_run_backtest", fail_phase)
 
     assert run_model_pipeline.main() == 0
+
+
+# ---------------------------------------------------------------------------
+# New tests: PolygonFetcher and DataLoader
+# ---------------------------------------------------------------------------
+
+# Fake Polygon /v1/open-close response
+FAKE_OPEN_CLOSE = {
+    "status": "OK",
+    "from": "2026-05-05",
+    "symbol": "AMZN",
+    "open": 185.50,
+    "high": 188.00,
+    "low": 183.10,
+    "close": 186.75,
+    "volume": 32_000_000,
+    "afterHours": 186.80,
+    "preMarket": 185.20,
+}
+
+
+def _mock_response(payload, status_code=200):
+    mock = MagicMock()
+    mock.status_code = status_code
+    mock.json.return_value = payload
+    mock.raise_for_status = MagicMock()
+    return mock
+
+
+def test_polygon_fetcher_raises_without_api_key(monkeypatch):
+    """PolygonFetcher must raise ValueError when no API key is available."""
+    monkeypatch.delenv("POLYGON_API_KEY", raising=False)
+
+    from qusa.data.fetcher import PolygonFetcher
+
+    with pytest.raises(ValueError, match="POLYGON_API_KEY"):
+        PolygonFetcher()
+
+
+def test_polygon_fetcher_latest_day_returns_correct_columns(monkeypatch):
+    """fetch_latest_day returns a single-row DataFrame with OHLCV columns."""
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+
+    from qusa.data.fetcher import PolygonFetcher
+
+    with patch("qusa.data.fetcher.requests.get", return_value=_mock_response(FAKE_OPEN_CLOSE)):
+        fetcher = PolygonFetcher()
+        df = fetcher.fetch_latest_day("AMZN")
+
+    assert len(df) == 1
+    assert set(df.columns) == {"date", "open", "high", "low", "close", "volume"}
+    assert df["close"].iloc[0] == pytest.approx(186.75)
+
+
+def test_polygon_fetcher_latest_day_raises_on_non_ok_status(monkeypatch):
+    """fetch_latest_day raises ValueError when Polygon returns a non-OK status."""
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+
+    from qusa.data.fetcher import PolygonFetcher
+
+    bad_response = {"status": "NOT_FOUND", "message": "No data found"}
+    with patch("qusa.data.fetcher.requests.get", return_value=_mock_response(bad_response)):
+        fetcher = PolygonFetcher()
+        with pytest.raises(ValueError, match="non-OK status"):
+            fetcher.fetch_latest_day("AMZN")
+
+
+def test_data_loader_merges_latest_onto_history(monkeypatch, tmp_path):
+    """
+    load_most_recent merges the fetched latest row onto an existing
+    historical CSV, deduplicates on date, and returns a sorted DataFrame.
+    """
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+
+    from qusa.data.loader import DataLoader
+
+    # Write a minimal historical CSV
+    history = pd.DataFrame(
+        {
+            "date": ["2026-05-01", "2026-05-02", "2026-05-04"],
+            "open":   [180.0, 181.0, 183.0],
+            "high":   [182.0, 183.0, 185.0],
+            "low":    [179.0, 180.0, 182.0],
+            "close":  [181.0, 182.0, 184.0],
+            "volume": [1_000_000, 1_100_000, 1_200_000],
+        }
+    )
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    history.to_csv(raw_dir / "AMZN_2026-01-01_2026-12-31.csv", index=False)
+
+    with patch(
+        "qusa.data.fetcher.requests.get",
+        return_value=_mock_response(FAKE_OPEN_CLOSE),
+    ):
+        loader = DataLoader(raw_data_dir=str(raw_dir))
+        merged = loader.load_most_recent(
+            "AMZN", start="2026-01-01", end="2026-12-31"
+        )
+
+    # Latest day file should exist
+    assert (raw_dir / "AMZN_latest.csv").exists()
+
+    # Merged result should have 4 rows (3 history + 1 new), sorted by date
+    assert len(merged) == 4
+    assert merged["date"].is_monotonic_increasing
+
+    # The latest close should appear
+    assert pytest.approx(186.75) in merged["close"].values
+
+
+def test_data_loader_no_history_returns_latest_only(monkeypatch, tmp_path):
+    """
+    load_most_recent still works when no historical CSV exists —
+    returns a single-row DataFrame of the latest day.
+    """
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+
+    from qusa.data.loader import DataLoader
+
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+
+    with patch(
+        "qusa.data.fetcher.requests.get",
+        return_value=_mock_response(FAKE_OPEN_CLOSE),
+    ):
+        loader = DataLoader(raw_data_dir=str(raw_dir))
+        result = loader.load_most_recent(
+            "AMZN", start="2026-01-01", end="2026-12-31"
+        )
+
+    assert len(result) == 1
+    assert result["close"].iloc[0] == pytest.approx(186.75)
+
+
+def test_data_loader_deduplicates_on_rerun(monkeypatch, tmp_path):
+    """
+    If the latest day already exists in the historical CSV,
+    load_most_recent should not add a duplicate row.
+    """
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+
+    from qusa.data.loader import DataLoader
+
+    # History already contains 2026-05-05 (same date as fake response)
+    history = pd.DataFrame(
+        {
+            "date":   ["2026-05-04", "2026-05-05"],
+            "open":   [183.0, 185.50],
+            "high":   [185.0, 188.00],
+            "low":    [182.0, 183.10],
+            "close":  [184.0, 186.75],
+            "volume": [1_200_000, 32_000_000],
+        }
+    )
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    history.to_csv(raw_dir / "AMZN_2026-01-01_2026-12-31.csv", index=False)
+
+    with patch(
+        "qusa.data.fetcher.requests.get",
+        return_value=_mock_response(FAKE_OPEN_CLOSE),
+    ):
+        loader = DataLoader(raw_data_dir=str(raw_dir))
+        merged = loader.load_most_recent(
+            "AMZN", start="2026-01-01", end="2026-12-31"
+        )
+
+    # Still 2 rows — no duplicate introduced
+    assert len(merged) == 2
