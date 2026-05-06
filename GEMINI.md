@@ -39,7 +39,7 @@ The project follows a sequential data pipeline:
 
 - **Fetch Latest Data**:
   ```bash
-  python scripts/get_most_recent_day.py
+  python scripts/fetch_data.py -ticker <TICKER> --days 1
   ```
 
 - **Run Feature Engineering Pipeline**:
