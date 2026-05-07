@@ -168,7 +168,7 @@ class MonteCarloFeatures:
 
     def add_all(self, df):
         """
-        Add Monte Carlo features to DataFrame using rolling window.
+        Add Monte Carlo features to DataFrame using vectorized simulation.
 
         Parameters:
             df (pd.DataFrame): DataFrame with price data
@@ -181,27 +181,79 @@ class MonteCarloFeatures:
         # Initialize feature columns with NaN
         for feature_name in self.features:
             df_modified[feature_name] = np.nan
-
-        # Also add expected_value if not in feature list (used internally)
+        
         if "mc_1d_expected_value" not in df_modified.columns:
             df_modified["mc_1d_expected_value"] = np.nan
 
-        # Calculate features for each row after threshold
-        for idx in range(self.min_data_threshold, len(df_modified)):
-            # Get rolling window
-            window_start = idx - self.window_size
-            price_window = df_modified[self.price_col].iloc[window_start:idx]
+        if len(df_modified) < self.min_data_threshold:
+            return df_modified
 
-            # Calculate features
-            features = self.calculate_mc_features_for_window(price_window)
+        # 1. Calculate log returns
+        log_returns = np.log(df_modified[self.price_col] / df_modified[self.price_col].shift(1))
 
-            if features is not None:
-                # Assign features to current row
-                for feature_name, feature_value in features.items():
-                    if feature_name in df_modified.columns:
-                        df_modified.loc[df_modified.index[idx], feature_name] = (
-                            feature_value
-                        )
+        # 2. Pre-calculate rolling drift and volatility
+        # Using the same window logic as before
+        rolling_mean = log_returns.rolling(window=self.window_size).mean()
+        rolling_var = log_returns.rolling(window=self.window_size).var()
+        rolling_std = log_returns.rolling(window=self.window_size).std()
+
+        drifts = (rolling_mean - 0.5 * rolling_var).values
+        vols = rolling_std.values
+        current_prices = df_modified[self.price_col].values
+
+        # 3. Vectorized simulation for each valid row
+        # Set random seed
+        np.random.seed(self.random_seed)
+        dt = 1 / 252
+        
+        # To handle all rows efficiently, we'll iterate through valid indices
+        # but the simulation itself is vectorized over iterations.
+        # Fully vectorizing across ALL rows AND ALL iterations might consume too much memory
+        # (e.g., 1000 rows * 1000 iterations = 1M values, which is fine, but let's be careful).
+        
+        valid_indices = range(self.min_data_threshold, len(df_modified))
+        
+        # Pre-generate shocks for all simulations to be fast
+        # (days_to_simulate=1, iterations, num_valid_rows)
+        all_shocks = np.random.normal(size=(self.iterations, len(valid_indices)))
+        
+        # Get parameters for valid rows only
+        valid_drifts = drifts[valid_indices]
+        valid_vols = vols[valid_indices]
+        valid_prices = current_prices[valid_indices]
+        
+        # Reshape for broadcasting: (iterations, num_valid_rows)
+        # drift/vol/prices are (num_valid_rows,) -> (1, num_valid_rows)
+        valid_drifts = valid_drifts.reshape(1, -1)
+        valid_vols = valid_vols.reshape(1, -1)
+        valid_prices = valid_prices.reshape(1, -1)
+        
+        # Calculate end prices: (iterations, num_valid_rows)
+        daily_returns = np.exp(valid_drifts * dt + valid_vols * np.sqrt(dt) * all_shocks)
+        simulated_prices = valid_prices * daily_returns
+        
+        # 4. Calculate statistics across iterations (axis=0)
+        # Statistics will be (num_valid_rows,)
+        q1 = np.percentile(simulated_prices, 1, axis=0)
+        q5 = np.percentile(simulated_prices, 5, axis=0)
+        q10 = np.percentile(simulated_prices, 10, axis=0)
+        q50 = np.percentile(simulated_prices, 50, axis=0)
+        q95 = np.percentile(simulated_prices, 95, axis=0)
+        expected_values = np.mean(simulated_prices, axis=0)
+        prob_breakeven = np.mean(simulated_prices > valid_prices, axis=0)
+        returns_pct = ((expected_values - valid_prices.flatten()) / valid_prices.flatten()) * 100
+        
+        # 5. Assign back to DataFrame
+        idx_array = df_modified.index[valid_indices]
+        
+        if "mc_1d_q1" in df_modified.columns: df_modified.loc[idx_array, "mc_1d_q1"] = q1
+        if "mc_1d_q5" in df_modified.columns: df_modified.loc[idx_array, "mc_1d_q5"] = q5
+        if "mc_1d_q10" in df_modified.columns: df_modified.loc[idx_array, "mc_1d_q10"] = q10
+        if "mc_1d_q50" in df_modified.columns: df_modified.loc[idx_array, "mc_1d_q50"] = q50
+        if "mc_1d_q95" in df_modified.columns: df_modified.loc[idx_array, "mc_1d_q95"] = q95
+        if "mc_1d_return_pct" in df_modified.columns: df_modified.loc[idx_array, "mc_1d_return_pct"] = returns_pct
+        if "mc_1d_prob_breakeven" in df_modified.columns: df_modified.loc[idx_array, "mc_1d_prob_breakeven"] = prob_breakeven
+        df_modified.loc[idx_array, "mc_1d_expected_value"] = expected_values
 
         return df_modified
 

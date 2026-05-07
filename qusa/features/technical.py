@@ -100,7 +100,7 @@ class TechnicalIndicators:
 
     def calculate_rsi(self, df):
         """
-        Calculate relative strength indicator (RSI).
+        Calculate relative strength indicator (RSI) using Wilder's EMA.
 
         Parameters:
             1) df (pd.DataFrame): DataFrame with stock data and 'close' column
@@ -116,11 +116,15 @@ class TechnicalIndicators:
         delta = df_mod[self.close].diff()
 
         # calculate positive, negative price changes
-        gain = (delta.where(delta > 0, 0)).rolling(window=self.period_rsi).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period_rsi).mean()
+        gain = (delta.where(delta > 0, 0))
+        loss = (-delta.where(delta < 0, 0))
+
+        # Wilder's Smoothing (EMA with alpha = 1/period)
+        avg_gain = gain.ewm(com=self.period_rsi - 1, min_periods=self.period_rsi).mean()
+        avg_loss = loss.ewm(com=self.period_rsi - 1, min_periods=self.period_rsi).mean()
 
         # calculate relative strength and add to DataFrame
-        relative_strength = gain / loss
+        relative_strength = avg_gain / avg_loss
 
         df_mod["rsi"] = 100 - (100 / (1 + relative_strength))
         df_mod["rsi_oversold"] = df_mod["rsi"] < 30
@@ -158,7 +162,7 @@ class TechnicalIndicators:
         # store max range per day
         daily_max_range = np.max(price_ranges, axis=1)
 
-        # calculate 14d rolling max price change
+        # calculate 14d rolling max price change (standard ATR uses smoothing, but keeping as is for now or switching to EMA if desired)
         df_mod["atr"] = daily_max_range.rolling(window=self.period_atr).mean()
         df_mod["atr_pct"] = (df_mod["atr"] / df_mod[self.close]) * 100
 
@@ -226,14 +230,14 @@ class TechnicalIndicators:
             df_mod["intraday_return"] > threshold
         )
         df_mod["intraday_return_strong_negative"] = (
-            df_mod["intraday_return"] < threshold
+            df_mod["intraday_return"] < -threshold
         )
 
         return df_mod
 
     def calculate_late_day_momentum(self, df):
         """
-        Calculate late day momentum.
+        Calculate late day momentum (close position relative to daily range).
 
         Parameters:
             1) df (pd.DataFrame): DataFrame containing stock data with 'close' column
@@ -244,13 +248,10 @@ class TechnicalIndicators:
 
         df_mod = df.copy()  # copy input DataFrame to avoid direct modification
 
-        # 1) late day momentum
-        df_mod["intraday_delta"] = df_mod[self.close] - df_mod[self.open]
-        df_mod["close_position"] = (df_mod[self.close] - df_mod[self.low]) / df_mod[
-            "intraday_delta"
-        ]
-        df_mod["close_position"] = df_mod["close_position"].fillna(
-            0.5
-        )  # handle division by 0 error
+        # 1) late day momentum - standard close position: (close - low) / (high - low)
+        # handle division by zero where high == low
+        range_hl = (df_mod[self.high] - df_mod[self.low])
+        df_mod["close_position"] = (df_mod[self.close] - df_mod[self.low]) / range_hl.replace(0, np.nan)
+        df_mod["close_position"] = df_mod["close_position"].fillna(0.5)
 
         return df_mod
