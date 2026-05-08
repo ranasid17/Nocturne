@@ -73,7 +73,9 @@ def main():
             df_new.to_csv(temp_path, index=False)
             
             # Consolidate
-            loader.consolidate_history(ticker)
+            _, skipped = loader.consolidate_history(ticker)
+            if skipped:
+                logger.warning(f"Skipped {len(skipped)} files due to errors: {skipped}")
             
         elif args.start:
             start_date = args.start

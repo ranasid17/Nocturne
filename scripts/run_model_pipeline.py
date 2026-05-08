@@ -284,7 +284,8 @@ def _run_backtest(ticker, paths, config, logger):
             logger=logger,
         )
 
-    has_mc = "mc_1d_q5" in backtester.data.columns
+    # Check if MC features are present in the model or data
+    has_mc = any(f.startswith("mc_") for f in backtester.features)
     _log_experiment_results(ticker, metrics, has_mc, config, logger)
 
     return True

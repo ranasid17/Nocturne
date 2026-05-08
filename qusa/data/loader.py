@@ -44,13 +44,12 @@ class DataLoader:
             1) ticker (str): Stock ticker symbol.
 
         Returns:
-            1) pd.DataFrame: Consolidated historical data.
+            1) tuple: (pd.DataFrame, list) Consolidated historical data and list of skipped files.
         """
         ticker = ticker.upper()
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         
         # 1. Find all relevant CSV files for this ticker
-        # Pattern matches {TICKER}_*.csv but we exclude processed/clustered/latest/history
         pattern = str(self.raw_dir / f"{ticker}_*.csv")
         all_files = glob.glob(pattern)
         
@@ -63,11 +62,14 @@ class DataLoader:
         # 2. Load and merge existing history if it exists
         history_path = self.raw_dir / f"{ticker}_history.csv"
         dfs = []
+        skipped_files = []
+
         if history_path.exists():
             try:
                 dfs.append(pd.read_csv(history_path))
             except Exception as e:
                 self.logger.error(f"✗ Could not read history file {history_path}: {e}")
+                skipped_files.append(str(history_path))
             
         # 3. Load all other source files
         for f in source_files:
@@ -75,12 +77,18 @@ class DataLoader:
                 dfs.append(pd.read_csv(f))
             except Exception as e:
                 self.logger.warning(f"⚠ Could not read source file {f}: {e}")
+                skipped_files.append(f)
 
         if not dfs:
-            return pd.DataFrame()
+            return pd.DataFrame(), skipped_files
 
         # 4. Consolidate
         merged = pd.concat(dfs, ignore_index=True)
+        
+        if "date" not in merged.columns:
+            self.logger.error("✗ Consolidated data missing 'date' column.")
+            return pd.DataFrame(), skipped_files
+
         merged["date"] = pd.to_datetime(merged["date"])
         consolidated = (
             merged.drop_duplicates(subset=["date"])
@@ -106,7 +114,7 @@ class DataLoader:
                     self.logger.warning(f"⚠ Could not archive {f}: {e}")
             self.logger.info(f"✓ Archived {len(source_files)} fragmented source files to {self.archive_dir}")
 
-        return consolidated
+        return consolidated, skipped_files
 
     def load_most_recent(self, ticker, start=None, end=None):
         """
@@ -131,7 +139,7 @@ class DataLoader:
         self.logger.info(f"✓ Latest day fetched → {latest_df['date'].iloc[0]}")
 
         # 2. Consolidate everything
-        history = self.consolidate_history(ticker)
+        history, _ = self.consolidate_history(ticker)
         
         # 3. Manually merge the latest day which was just saved to _latest.csv 
         # (Note: consolidate_history excludes _latest.csv from its scan)
@@ -147,7 +155,7 @@ class DataLoader:
             .reset_index(drop=True)
         )
         
-        # Apply date filters if provided
+        # Apply date filters if provided (Task 3.2)
         if start:
             final = final[final["date"] >= pd.to_datetime(start)]
         if end:
@@ -156,16 +164,7 @@ class DataLoader:
         final = final.copy()
         final["date"] = final["date"].dt.strftime("%Y-%m-%d")
         
-        # Update history file with the full (unfiltered) consolidated data
-        # Actually, we want to save the FULL history, but return the filtered version
-        # consolidate_history already saved the full history.
-        # But latest_df wasn't in it. Let's ensure it gets saved.
-        
-        history_path = self.raw_dir / f"{ticker}_history.csv"
-        # We reload the full history to ensure we don't accidentally save a filtered version
-        full_history = self.consolidate_history(ticker) # re-run to pick up latest? 
-        # Actually, I should just make consolidate_history include _latest.csv
-        
+        # Note: We return the filtered data, but history file contains full data.
         return final
 
     def load_range(self, ticker, start, end):
@@ -179,4 +178,5 @@ class DataLoader:
         temp_path = self.raw_dir / f"{ticker}_{start}_{end}.csv"
         df.to_csv(temp_path, index=False)
         
-        return self.consolidate_history(ticker)
+        history, _ = self.consolidate_history(ticker)
+        return history
