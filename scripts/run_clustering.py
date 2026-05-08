@@ -286,10 +286,10 @@ def analyze_clusters(data, analyzer, logger):
         )
 
         logger.info("Volume:")
-        logger.info(
-            f"  Mean Ratio: {cluster_data['volume_ratio'].mean():.2f}x | "
-            f"Spikes (>2x): {(cluster_data['volume_spike']).sum()} days"
-        )
+        volume_msg = f"  Mean Ratio: {cluster_data['volume_ratio'].mean():.2f}x"
+        if "volume_spike" in cluster_data.columns:
+            volume_msg += f" | Spikes (>2x): {cluster_data['volume_spike'].sum()} days"
+        logger.info(volume_msg)
 
         logger.info("RSI:")
         logger.info(
@@ -301,6 +301,13 @@ def analyze_clusters(data, analyzer, logger):
         if "abnormal" in cluster_data.columns:
             abnormal_rate = cluster_data["abnormal"].mean() * 100
             logger.info(f"Abnormal Overnight Moves: {abnormal_rate:.1f}%")
+        else:
+            logger.debug("Column 'abnormal' not found in cluster data.")
+
+        if "volume_spike" in cluster_data.columns:
+            logger.info(f"Volume Spikes (>2x): {cluster_data['volume_spike'].sum()} days")
+        else:
+            logger.debug("Column 'volume_spike' not found in cluster data.")
 
         if "day_of_week" in cluster_data.columns:
             logger.info("Day of Week Distribution:")

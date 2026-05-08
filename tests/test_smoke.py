@@ -307,8 +307,8 @@ def test_data_loader_consolidate_history(tmp_path):
     df2.to_csv(raw_dir / "AMZN_2024-01-02_2024-01-03.csv", index=False)
     
     loader = DataLoader(raw_data_dir=str(raw_dir))
-    consolidated = loader.consolidate_history("AMZN")
-    
+    consolidated, _ = loader.consolidate_history("AMZN")
+
     # Should have 3 unique days
     assert len(consolidated) == 3
     assert (raw_dir / "AMZN_history.csv").exists()

@@ -10,7 +10,7 @@ import pandas as pd
 
 from datetime import datetime
 from sklearn.metrics import accuracy_score, confusion_matrix
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, TimeSeriesSplit
 from sklearn.tree import DecisionTreeClassifier
 
 
@@ -208,7 +208,9 @@ class OvernightDirectionModel:
         )
 
         # cross validation
-        cv_score = cross_val_score(self.model, X_train, y_train, cv=self.config["cv"])
+        cv_score = cross_val_score(
+            self.model, X_train, y_train, cv=TimeSeriesSplit(n_splits=self.config["cv"])
+        )
 
         print(f"✓ CV accuracy: {cv_score.mean():.3f} (+/- {cv_score.std():.3f})")
 
