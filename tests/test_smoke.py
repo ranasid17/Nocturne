@@ -412,6 +412,9 @@ def test_data_loader_deduplicates_on_rerun(monkeypatch, tmp_path):
     with patch(
         "qusa.data.fetcher.requests.get",
         return_value=_mock_response(FAKE_OPEN_CLOSE),
+    ), patch(
+        "qusa.data.fetcher.PolygonFetcher._get_most_recent_trading_day",
+        return_value="2026-05-05"
     ):
         loader = DataLoader(raw_data_dir=str(raw_dir))
         merged = loader.load_most_recent(
