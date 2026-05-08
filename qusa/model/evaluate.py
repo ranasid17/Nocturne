@@ -4,6 +4,7 @@
 Evaluate model performance.
 """
 
+import logging
 import joblib
 import os
 import pandas as pd
@@ -24,14 +25,15 @@ class ModelEvaluator:
     Class to evaluate trained ML model.
     """
 
-    def __init__(self, model_path):
+    def __init__(self, model_path, logger=None):
         """
         Class constructor.
 
         Parameters:
             1) model_path (str): Path to saved/trained model
+            2) logger (logging.Logger, optional): Logger instance
         """
-
+        self.logger = logger or logging.getLogger(__name__)
         self.model_path = os.path.expanduser(model_path)
         self._load_model()
 
@@ -47,7 +49,7 @@ class ModelEvaluator:
         self.features = bundle["features"]
         self.threshold = bundle["threshold"]
 
-        print(f"✓ Model loaded")
+        self.logger.info(f"✓ Model loaded")
 
         return
 
@@ -157,9 +159,9 @@ class ModelEvaluator:
             {"y_true": y_true, "y_prob": y_prob, "bin": pd.cut(y_prob, bins=bins)}
         )
 
-        calibration = df.groupby(["bin"]).agg(
+        calibration = df.groupby(["bin"], observed=False).agg(
             count=("y_true", "size"),
-            actual_rate=("y_prob", "mean"),
+            actual_rate=("y_true", "mean"),
             predicted_rate=("y_prob", "mean"),
         )
 

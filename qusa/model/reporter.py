@@ -5,6 +5,7 @@ Generate intelligent reports using local LLM for trading system analysis.
 Includes deep model interpretation, feature analysis, and limitation detection.
 """
 
+import logging
 import requests
 
 from datetime import datetime
@@ -25,6 +26,7 @@ class StrategyReporter:
         max_tokens=None,
         output_dir=None,
         save_default=None,
+        logger=None,
     ):
         """
         Initialize reporter with config or explicit parameters.
@@ -37,41 +39,41 @@ class StrategyReporter:
             5) max_tokens (int, optional): Max response tokens (overrides config)
             6) output_dir (str, optional): Report output directory (overrides config)
             7) save_default (bool, optional): Default save behavior (overrides config)
+            8) logger (logging.Logger, optional): Logger instance
         """
+        self.logger = logger or logging.getLogger(__name__)
 
-        # handle case where user passes config
-        if config:
-            # extract parameter dicts from config
-            llm_config = config.get("reporting", {}).get("llm", {})
-            paths_config = config.get("data", {}).get("paths", {})
-            defaults_config = config.get("defaults", {}).get("reporter", {})
+        if not config:
+            raise ValueError("config is required to initialize StrategyReporter")
 
-            # set parameters as attributes
-            self.model_name = model_name or llm_config.get("model", "gemma4:e4b")
-            self.base_url = base_url or llm_config.get(
-                "base_url", "http://localhost:11434"
-            )
-            self.temperature = (
-                temperature
-                if temperature is not None
-                else llm_config.get("temperature", 0.2)
-            )
-            self.max_tokens = max_tokens or llm_config.get("max_tokens", 1000)
-            self.output_dir = output_dir or paths_config.get(
-                "reports_dir", "~/Projects/qusa/data/reports"
-            )
-            self.save_default = (
-                save_default
-                if save_default is not None
-                else defaults_config.get("save", True)
-            )
+        # extract parameter dicts from config
+        llm_config = config.get("reporting", {}).get("llm", {})
+        paths_config = config.get("data", {}).get("paths", {})
+        defaults_config = config.get("defaults", {}).get("reporter", {})
 
-            # confirm output directory path
-            self.output_dir = Path(self.output_dir).expanduser().resolve()
-            self.output_dir.mkdir(parents=True, exist_ok=True)
+        # set parameters as attributes
+        self.model_name = model_name or llm_config.get("model", "gemma4:e4b")
+        self.base_url = base_url or llm_config.get(
+            "base_url", "http://localhost:11434"
+        )
+        self.temperature = (
+            temperature
+            if temperature is not None
+            else llm_config.get("temperature", 0.2)
+        )
+        self.max_tokens = max_tokens or llm_config.get("max_tokens", 1000)
+        self.output_dir = output_dir or paths_config.get(
+            "reports_dir", "~/Projects/qusa/data/reports"
+        )
+        self.save_default = (
+            save_default
+            if save_default is not None
+            else defaults_config.get("save", True)
+        )
 
-        else:
-            print("Pass config to initialize object")
+        # confirm output directory path
+        self.output_dir = Path(self.output_dir).expanduser().resolve()
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
         return
 
@@ -183,7 +185,7 @@ class StrategyReporter:
                 f.write("=" * 80 + "\n\n")
                 f.write(report)
 
-            print(f"\n✓ Report saved to {report_path}")
+            self.logger.info(f"✓ Report saved to {report_path}")
 
         return report
 
@@ -261,7 +263,7 @@ class StrategyReporter:
                 f.write("=" * 80 + "\n\n")
                 f.write(report)
 
-            print(f"\n✓ Report saved to {report_path}")
+            self.logger.info(f"✓ Report saved to {report_path}")
 
         return report
 
@@ -346,6 +348,6 @@ class StrategyReporter:
                 f.write("=" * 80 + "\n\n")
                 f.write(report)
 
-            print(f"\n✓ Report saved to {report_path}")
+            self.logger.info(f"✓ Report saved to {report_path}")
 
         return report

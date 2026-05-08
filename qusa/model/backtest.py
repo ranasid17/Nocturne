@@ -4,6 +4,7 @@
 Backtest overnight delta prediction model.
 """
 
+import logging
 import joblib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,14 +20,16 @@ class ModelBacktester:
     model predictions.
     """
 
-    def __init__(self, model_path, backtest_data_path):
+    def __init__(self, model_path, backtest_data_path, logger=None):
         """
         Class constructor.
 
         Parameters:
             1) model_path (str): Path to saved/trained model
             2) backtest_data_path (str): Path to data for backtesting
+            3) logger (logging.Logger, optional): Logger instance
         """
+        self.logger = logger or logging.getLogger(__name__)
 
         # store paths to model and dataset as attributes
         self.model_path = os.path.expanduser(model_path)
@@ -47,7 +50,7 @@ class ModelBacktester:
         self.features = bundle["features"]
         self.threshold = bundle["threshold"]
 
-        print(f"✓ Model loaded")
+        self.logger.info(f"✓ Model loaded")
 
     def _load_data(self):
         """
@@ -57,7 +60,7 @@ class ModelBacktester:
         self.data = pd.read_csv(self.backtest_data_path)
         self.data["date"] = pd.to_datetime(self.data["date"])
 
-        print(f"✓ Loaded {len(self.data)} days of data")
+        self.logger.info(f"✓ Loaded {len(self.data)} days of data")
 
     def run_backtest(self, initial_capital, position_size, transaction_cost):
         """
@@ -130,6 +133,7 @@ class ModelBacktester:
         results["buy_hold_value"] = initial_capital * (results["close"] / first_close)
 
         self.results = results
+        self.data = results
         return results
 
     def calculate_metrics(self, initial_capital):

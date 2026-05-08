@@ -6,6 +6,7 @@ predictions on most-recent trading
 day data.
 """
 
+import logging
 import joblib
 import os
 import pandas as pd
@@ -18,14 +19,15 @@ class LivePredictor:
     Make predictions on live market data.
     """
 
-    def __init__(self, model_path):
+    def __init__(self, model_path, logger=None):
         """
         Class constructor.
 
         Parameters;
             1) model_path (str): Path to saved model
+            2) logger (logging.Logger, optional): Logger instance
         """
-
+        self.logger = logger or logging.getLogger(__name__)
         self.model_path = os.path.expanduser(model_path)
         self._load_model()
 
@@ -41,7 +43,7 @@ class LivePredictor:
         self.threshold = bundle["threshold"]
         self.trained_date = bundle.get("trained_date", "Unknown")
 
-        print(f"✓ Model loaded (trained: {self.trained_date})")
+        self.logger.info(f"✓ Model loaded (trained: {self.trained_date})")
 
         return
 
@@ -110,7 +112,7 @@ class LivePredictor:
         print(f"Confidence: {prediction['confidence']}")
 
         # handle cases with high prediction confidence
-        if (prediction["confidence"] == "HIGH") & (prediction["prediction"] == 1):
+        if prediction["confidence"] == "HIGH":
             # handle case where high confidence positive prediction
             if prediction["prediction"] == 1:
                 print("\n✓ STRONG BUY signal")

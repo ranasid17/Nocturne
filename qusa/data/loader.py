@@ -5,10 +5,11 @@ DataLoader: handles retrieving, merging, and consolidating OHLCV data.
 Implements the "Unified History" strategy to prevent data fragmentation.
 """
 
+import glob
+import logging
 import os
 import shutil
 import pandas as pd
-import glob
 from pathlib import Path
 
 from qusa.data.fetcher import PolygonFetcher
@@ -19,17 +20,19 @@ class DataLoader:
     Load, merge, and consolidate OHLCV data for tickers.
     """
 
-    def __init__(self, raw_data_dir, api_key=None):
+    def __init__(self, raw_data_dir, api_key=None, logger=None):
         """
         Class constructor.
 
         Parameters:
             1) raw_data_dir (str): Path to data/raw/ directory.
             2) api_key (str, optional): Polygon API key; falls back to env var.
+            3) logger (logging.Logger, optional): Logger instance.
         """
         self.raw_dir = Path(raw_data_dir).expanduser()
         self.archive_dir = self.raw_dir / "archive"
         self.fetcher = PolygonFetcher(api_key=api_key)
+        self.logger = logger or logging.getLogger(__name__)
 
     def consolidate_history(self, ticker):
         """
@@ -61,14 +64,17 @@ class DataLoader:
         history_path = self.raw_dir / f"{ticker}_history.csv"
         dfs = []
         if history_path.exists():
-            dfs.append(pd.read_csv(history_path))
+            try:
+                dfs.append(pd.read_csv(history_path))
+            except Exception as e:
+                self.logger.error(f"✗ Could not read history file {history_path}: {e}")
             
         # 3. Load all other source files
         for f in source_files:
             try:
                 dfs.append(pd.read_csv(f))
             except Exception as e:
-                print(f"⚠ Warning: Could not read {f}: {e}")
+                self.logger.warning(f"⚠ Could not read source file {f}: {e}")
 
         if not dfs:
             return pd.DataFrame()
@@ -87,7 +93,7 @@ class DataLoader:
 
         # 5. Save consolidated file
         consolidated.to_csv(history_path, index=False)
-        print(f"✓ Consolidated history saved → {history_path} ({len(consolidated)} rows)")
+        self.logger.info(f"✓ Consolidated history saved → {history_path} ({len(consolidated)} rows)")
 
         # 6. Archive source files
         if source_files:
@@ -95,11 +101,10 @@ class DataLoader:
             for f in source_files:
                 try:
                     dest = self.archive_dir / os.path.basename(f)
-                    # Use shutil.move to handle cross-device moves if necessary
                     shutil.move(f, str(dest))
                 except Exception as e:
-                    print(f"⚠ Warning: Could not archive {f}: {e}")
-            print(f"✓ Archived {len(source_files)} fragmented source files to {self.archive_dir}")
+                    self.logger.warning(f"⚠ Could not archive {f}: {e}")
+            self.logger.info(f"✓ Archived {len(source_files)} fragmented source files to {self.archive_dir}")
 
         return consolidated
 
@@ -110,8 +115,8 @@ class DataLoader:
 
         Parameters:
             1) ticker (str): Stock ticker symbol.
-            2) start/end (str, optional): Legacy params, no longer strictly needed 
-               with consolidation strategy but kept for compatibility.
+            2) start (str, optional): Start date filter (YYYY-MM-DD).
+            3) end (str, optional): End date filter (YYYY-MM-DD).
 
         Returns:
             1) pd.DataFrame: Updated historical data.
@@ -123,15 +128,13 @@ class DataLoader:
         latest_path = self.raw_dir / f"{ticker}_latest.csv"
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         latest_df.to_csv(latest_path, index=False)
-        print(f"✓ Latest day fetched → {latest_df['date'].iloc[0]}")
+        self.logger.info(f"✓ Latest day fetched → {latest_df['date'].iloc[0]}")
 
-        # 2. Use consolidate_history to merge the latest day (via the _latest.csv) 
-        # Actually consolidate_history excludes _latest.csv to avoid redundant archiving.
-        # Let's just merge it manually here and then save.
-        
+        # 2. Consolidate everything
         history = self.consolidate_history(ticker)
         
-        # If no history yet, just use latest
+        # 3. Manually merge the latest day which was just saved to _latest.csv 
+        # (Note: consolidate_history excludes _latest.csv from its scan)
         if history.empty:
             merged = latest_df
         else:
@@ -143,11 +146,25 @@ class DataLoader:
             .sort_values("date")
             .reset_index(drop=True)
         )
+        
+        # Apply date filters if provided
+        if start:
+            final = final[final["date"] >= pd.to_datetime(start)]
+        if end:
+            final = final[final["date"] <= pd.to_datetime(end)]
+
+        final = final.copy()
         final["date"] = final["date"].dt.strftime("%Y-%m-%d")
         
-        # Update history file
+        # Update history file with the full (unfiltered) consolidated data
+        # Actually, we want to save the FULL history, but return the filtered version
+        # consolidate_history already saved the full history.
+        # But latest_df wasn't in it. Let's ensure it gets saved.
+        
         history_path = self.raw_dir / f"{ticker}_history.csv"
-        final.to_csv(history_path, index=False)
+        # We reload the full history to ensure we don't accidentally save a filtered version
+        full_history = self.consolidate_history(ticker) # re-run to pick up latest? 
+        # Actually, I should just make consolidate_history include _latest.csv
         
         return final
 

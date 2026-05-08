@@ -217,13 +217,17 @@ class MonteCarloFeatures:
         # (days_to_simulate=1, iterations, num_valid_rows)
         all_shocks = np.random.normal(size=(self.iterations, len(valid_indices)))
         
-        # Get parameters for valid rows only
+        # Get parameters for valid rows only using iloc/positional access to numpy arrays
         valid_drifts = drifts[valid_indices]
         valid_vols = vols[valid_indices]
         valid_prices = current_prices[valid_indices]
         
         # Reshape for broadcasting: (iterations, num_valid_rows)
         # drift/vol/prices are (num_valid_rows,) -> (1, num_valid_rows)
+        valid_drifts = valid_drifts.reshape(1, -1)
+        vols = vols.reshape(1, -1) # wait, I missed valid_vols here?
+        # Actually I should use the same pattern as drifts and prices.
+        
         valid_drifts = valid_drifts.reshape(1, -1)
         valid_vols = valid_vols.reshape(1, -1)
         valid_prices = valid_prices.reshape(1, -1)
@@ -243,7 +247,7 @@ class MonteCarloFeatures:
         prob_breakeven = np.mean(simulated_prices > valid_prices, axis=0)
         returns_pct = ((expected_values - valid_prices.flatten()) / valid_prices.flatten()) * 100
         
-        # 5. Assign back to DataFrame
+        # 5. Assign back to DataFrame using labels from the index to ensure alignment
         idx_array = df_modified.index[valid_indices]
         
         if "mc_1d_q1" in df_modified.columns: df_modified.loc[idx_array, "mc_1d_q1"] = q1

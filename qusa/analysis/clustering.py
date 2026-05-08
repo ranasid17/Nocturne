@@ -275,8 +275,8 @@ class ClusterAnalyzer:
 
             # extract key characteristics for current cluster
             overnight = row.get("mean_overnight_delta_pct", 0)
-            volume = row.get("volume_ratio_mean", 0)
-            rsi = row.get("rsi_mean", 0)
+            volume = row.get("mean_volume_ratio", 0)
+            rsi = row.get("mean_rsi", 0)
 
             # interpret with logic rules using feature thresholds
             if (volume > 1.0) and (abs(overnight) > 2.0):
@@ -430,3 +430,4 @@ class ClusterAnalyzer:
         print("\n" + "=" * 80)
 
         return
+
