@@ -79,12 +79,8 @@ class MonteCarloFeatures:
             return df_modified
 
         # Determine indices to compute
-        # We compute for rows after threshold where features are missing
         potential_indices = np.arange(self.min_data_threshold, len(df_modified))
         
-        # For incremental: check if last row is already computed
-        # Actually, if any MC col is NaN in valid range, we compute.
-        # This is simpler and robust to partial failures.
         missing_mask = df_modified[required_cols].isna().any(axis=1)
         valid_indices = [i for i in potential_indices if missing_mask.iloc[i]]
 
@@ -115,16 +111,6 @@ class MonteCarloFeatures:
         
         # 3. Iterate over horizons (Task 5.2)
         for h in self.horizons:
-            # Pre-generate shocks: (h, iterations, num_comp_rows)
-            # For 1-day, h=1. 
-            # Vectorizing over iterations and rows.
-            # Total values = h * iterations * len(valid_indices)
-            # If h=1, iterations=1000, rows=1000 -> 1M values (OK)
-            
-            # Use sum of shocks for cumulative returns in GBM
-            # log(S_T/S_0) ~ Normal((mu - 0.5*sigma^2)*T, sigma*sqrt(T)*Z)
-            # where Z ~ N(0, 1) and T = h * dt
-            
             shocks = np.random.normal(size=(self.iterations, len(valid_indices)))
             
             T = h * dt
