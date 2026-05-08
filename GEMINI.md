@@ -44,22 +44,22 @@ The project follows a sequential data pipeline:
 
 - **Run Feature Engineering Pipeline**:
   ```bash
-  python scripts/run_FE_pipeline.py <TICKER>
+  python scripts/run_FE_pipeline.py -ticker <TICKER>
   ```
 
 - **Run Clustering Analysis**:
   ```bash
-  python scripts/run_clustering.py <TICKER>
+  python scripts/run_clustering.py -ticker <TICKER>
   ```
 
 - **Run Full Model Pipeline (Train/Eval/Backtest)**:
   ```bash
-  python scripts/run_model_pipeline.py --tickers <TICKER1> <TICKER2>
+  python scripts/run_model_pipeline.py -ticker <TICKER1> <TICKER2>
   ```
 
 - **Run Live Prediction**:
   ```bash
-  python scripts/model_prediction.py <TICKER>
+  python scripts/model_prediction.py -ticker <TICKER>
   ```
 
 - **Run Tests**:

@@ -53,13 +53,11 @@ def main():
 
     loader = DataLoader(raw_data_dir=str(raw_data_dir))
     
+    temp_path = None
     try:
         if args.days:
             logger.info(f"Fetching last {args.days} trading days for {ticker}...")
-            # DataLoader.load_range is basically what we want if we calculated start/end,
-            # but fetch_n_days is in the fetcher. Let's add fetch_n_days support to loader or just use it.
             
-            # For simplicity, we'll let the loader handle it through fetcher
             df_new = loader.fetcher.fetch_n_days(ticker, args.days)
             if df_new.empty:
                 logger.warning("No data found.")
@@ -93,6 +91,16 @@ def main():
     except Exception as e:
         logger.error(f"✗ Failed to fetch data: {e}")
         return 1
+    
+    finally:
+        # Clean up temp file if it exists (consolidate_history archives it on success, 
+        # but if it fails before consolidation, we should remove it)
+        if temp_path and temp_path.exists():
+            try:
+                temp_path.unlink()
+                logger.debug(f"Cleaned up orphan temp file {temp_path}")
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

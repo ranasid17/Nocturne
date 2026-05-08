@@ -4,6 +4,7 @@
 Train model to predict overnight price direction.
 """
 
+import logging
 import joblib
 import os
 import pandas as pd
@@ -13,6 +14,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split, cross_val_score, TimeSeriesSplit
 from sklearn.tree import DecisionTreeClassifier
 
+logger = logging.getLogger(__name__)
 
 # define allowed features for training
 SAFE_FEATURES = [
@@ -151,7 +153,7 @@ class OvernightDirectionModel:
             1) data_path (str): Path to data for model
         """
 
-        print("Loading data...")
+        logger.info("Loading data...")
         data = pd.read_csv(os.path.expanduser(data_path))
 
         ###
@@ -160,12 +162,12 @@ class OvernightDirectionModel:
         # Remove confounding features
         ###
 
-        print("Preparing data...")
+        logger.info("Preparing data...")
         data["target"] = (data["overnight_delta"] > 0).astype(int)
         data = data.dropna(subset=["overnight_delta"])
         data = data.drop(columns=CONFOUND_FEATURES, errors="ignore")
 
-        print(f"✓ Loaded {len(data)} rows")
+        logger.info(f"✓ Loaded {len(data)} rows")
 
         return data
 
@@ -196,7 +198,7 @@ class OvernightDirectionModel:
             2) y_train (type): fill here
         """
 
-        print("Training model...")
+        logger.info("Training model...")
 
         # initialize model
         self.model = DecisionTreeClassifier(
@@ -212,15 +214,15 @@ class OvernightDirectionModel:
             self.model, X_train, y_train, cv=TimeSeriesSplit(n_splits=self.config["cv"])
         )
 
-        print(f"✓ CV accuracy: {cv_score.mean():.3f} (+/- {cv_score.std():.3f})")
+        logger.info(f"✓ CV accuracy: {cv_score.mean():.3f} (+/- {cv_score.std():.3f})")
 
         # fit model and store timestamp
         self.model.fit(X_train, y_train)
         self.trained_date = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
 
-        print(f"✓ Model trained")
-        print(f"  - Tree depth: {self.model.get_depth()}")
-        print(f"  - Leaves: {self.model.get_n_leaves()}")
+        logger.info(f"✓ Model trained")
+        logger.info(f"  - Tree depth: {self.model.get_depth()}")
+        logger.info(f"  - Leaves: {self.model.get_n_leaves()}")
 
         return self
 
@@ -233,7 +235,7 @@ class OvernightDirectionModel:
             2) y_test (type): fill here
         """
 
-        print("\nEvaluating model...")
+        logger.info("\nEvaluating model...")
 
         # predict labels for test set and store probabilities
         y_pred = self.model.predict(X_test)
@@ -252,19 +254,18 @@ class OvernightDirectionModel:
             "true_positives": int(cm[1, 1]),
         }
 
-        print(f"✓ Test accuracy: {accuracy:.3f}")
-        print(f"\nConfusion Matrix:")
-        print(cm)
+        logger.info(f"✓ Test accuracy: {accuracy:.3f}")
+        logger.info(f"\nConfusion Matrix:\n{cm}")
 
         # store feature importance
         importance = pd.Series(
             self.model.feature_importances_, index=self.feature_names
         ).sort_values(ascending=False)
 
-        print(f"\nTop 5 Important Features:")
+        logger.info(f"\nTop 5 Important Features:")
 
-        for ft, imp in importance.items():
-            print(f"  {ft:30s}: {imp:.4f}")
+        for ft, imp in list(importance.items())[:5]:
+            logger.info(f"  {ft:30s}: {imp:.4f}")
 
         self.metrics["feature_importance"] = importance.to_dict()
 
@@ -296,7 +297,7 @@ class OvernightDirectionModel:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         joblib.dump(bundle, save_path)
 
-        print(f"\n✓ Model saved to: {save_path}")
+        logger.info(f"\n✓ Model saved to: {save_path}")
 
         return save_path
 
@@ -311,9 +312,9 @@ def train_model(data_path, save_path, config=None):
         3) config (dict): Model configuration
     """
 
-    print("=" * 80)
-    print("OVERNIGHT DIRECTION MODEL TRAINING")
-    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info("OVERNIGHT DIRECTION MODEL TRAINING")
+    logger.info("=" * 80)
 
     # initialize model
     model = OvernightDirectionModel(config=config)
@@ -330,15 +331,15 @@ def train_model(data_path, save_path, config=None):
         X, y, test_size=test_size, shuffle=False
     )
 
-    print(f"\nTrain: {len(X_train)} | Test: {len(X_test)}")
+    logger.info(f"\nTrain: {len(X_train)} | Test: {len(X_test)}")
 
     # train, evaluate, save model
     model.train(X_train, y_train)
     model.evaluate(X_test, y_test)
     model.save_model(save_path)
 
-    print("\n" + "=" * 80)
-    print("✓ TRAINING COMPLETE")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ TRAINING COMPLETE")
+    logger.info("=" * 80)
 
     return model

@@ -13,21 +13,21 @@ import pandas as pd
 
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 
 class LivePredictor:
     """
     Make predictions on live market data.
     """
 
-    def __init__(self, model_path, logger=None):
+    def __init__(self, model_path):
         """
         Class constructor.
 
         Parameters;
             1) model_path (str): Path to saved model
-            2) logger (logging.Logger, optional): Logger instance
         """
-        self.logger = logger or logging.getLogger(__name__)
         self.model_path = os.path.expanduser(model_path)
         self._load_model()
 
@@ -43,7 +43,7 @@ class LivePredictor:
         self.threshold = bundle["threshold"]
         self.trained_date = bundle.get("trained_date", "Unknown")
 
-        self.logger.info(f"✓ Model loaded (trained: {self.trained_date})")
+        logger.info(f"✓ Model loaded (trained: {self.trained_date})")
 
         return
 
@@ -100,29 +100,29 @@ class LivePredictor:
             1) prediction (dict): Model prediction on most-recent data
         """
 
-        print("\n" + "=" * 80)
-        print("PREDICTION")
-        print("=" * 80)
+        logger.info("\n" + "=" * 80)
+        logger.info("PREDICTION")
+        logger.info("=" * 80)
 
         if prediction["date"]:
-            print(f"Date: {prediction['date']}")
+            logger.info(f"Date: {prediction['date']}")
 
-        print(f"Direction: {prediction['direction']}")
-        print(f"Probability (UP): {prediction['probability_up']:.1%}")
-        print(f"Confidence: {prediction['confidence']}")
+        logger.info(f"Direction: {prediction['direction']}")
+        logger.info(f"Probability (UP): {prediction['probability_up']:.1%}")
+        logger.info(f"Confidence: {prediction['confidence']}")
 
         # handle cases with high prediction confidence
         if prediction["confidence"] == "HIGH":
             # handle case where high confidence positive prediction
             if prediction["prediction"] == 1:
-                print("\n✓ STRONG BUY signal")
+                logger.info("\n✓ STRONG BUY signal")
             # otherwise high confidence negative prediction
             else:
-                print("\n✓ STRONG SELL signal")
+                logger.info("\n✓ STRONG SELL signal")
 
         # otherwise low prediction confidence
         else:
-            print("\n⚠ LOW CONFIDENCE - No clear signal")
+            logger.info("\n⚠ LOW CONFIDENCE - No clear signal")
 
         return
 
