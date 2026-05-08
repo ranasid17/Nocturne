@@ -225,6 +225,10 @@ class MonteCarloFeatures:
         # Reshape for broadcasting: (iterations, num_valid_rows)
         # drift/vol/prices are (num_valid_rows,) -> (1, num_valid_rows)
         valid_drifts = valid_drifts.reshape(1, -1)
+        vols = vols.reshape(1, -1) # wait, I missed valid_vols here?
+        # Actually I should use the same pattern as drifts and prices.
+        
+        valid_drifts = valid_drifts.reshape(1, -1)
         valid_vols = valid_vols.reshape(1, -1)
         valid_prices = valid_prices.reshape(1, -1)
         
