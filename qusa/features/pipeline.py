@@ -77,10 +77,13 @@ class FeaturePipeline:
         # Step 2) Calculate technical indicators
         df_mod = self.technical_indicators.add_all(df_mod)
 
-        # Step 3) Calculate calendar features
+        # Step 3) Calculate volatility features (Task 5.1)
+        df_mod = self.volatility_calculator.add_all(df_mod)
+
+        # Step 4) Calculate calendar features
         df_mod = self.calendar_features.add_all(df_mod)
 
-        # Step 4) Calculate Monte Carlo features (if enabled)
+        # Step 5) Calculate Monte Carlo features (if enabled)
         if self.monte_carlo is not None:
             df_mod = self.monte_carlo.add_all(df_mod)
 
@@ -112,6 +115,9 @@ class FeaturePipeline:
                 "52_week_low_proximity",
             ]
         )
+
+        # Volatility features (Task 5.1)
+        features.extend(["vwap_deviation", "vol_regime"])
 
         # Calendar features
         features.extend(
