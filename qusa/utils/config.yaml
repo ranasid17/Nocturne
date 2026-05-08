@@ -22,6 +22,9 @@ features:
   atr_window: 14
   volume_ma_window: 20
   rolling_window_52w: 252
+  vwap_window: 20
+  vol_regime_short_window: 5
+  vol_regime_long_window: 20
 
 # ------------------
 # Analysis settings

@@ -9,7 +9,14 @@ from qusa.model.interpreter import ModelInterpreter
 
 
 def generate_backtest_report(
-    ticker, metrics, backtest_results=None, config=None, save=None, output_filename=None
+    ticker,
+    metrics,
+    backtest_results=None,
+    config=None,
+    save=None,
+    output_filename=None,
+    mc_summary=None,
+    cluster_summary=None,
 ):
     """
     Generate backtest report using StrategyReporter.
@@ -21,6 +28,8 @@ def generate_backtest_report(
         4) config (dict, optional): Configuration dictionary
         5) save (bool, optional): Whether to save report
         6) output_filename (str, optional): Custom output filename
+        7) mc_summary (str, optional): Summary of MC features
+        8) cluster_summary (str, optional): Summary of cluster regimes
 
     Returns:
         1) report (str): Generated report text
@@ -34,13 +43,21 @@ def generate_backtest_report(
         backtest_results=backtest_results,
         save=save,
         output_filename=output_filename,
+        mc_summary=mc_summary,
+        cluster_summary=cluster_summary,
     )
 
     return report
 
 
 def generate_evaluation_report(
-    ticker, metrics, config=None, save=None, output_filename=None
+    ticker,
+    metrics,
+    config=None,
+    save=None,
+    output_filename=None,
+    mc_summary=None,
+    cluster_summary=None,
 ):
     """
     Generate evaluation report using StrategyReporter.
@@ -51,6 +68,8 @@ def generate_evaluation_report(
         3) config (dict, optional): Configuration dictionary
         4) save (bool, optional): Whether to save report
         5) output_filename (str, optional): Custom output filename
+        6) mc_summary (str, optional): Summary of MC features
+        7) cluster_summary (str, optional): Summary of cluster regimes
 
     Returns:
         1) report (str): Generated report text
@@ -63,6 +82,8 @@ def generate_evaluation_report(
         metrics=metrics,
         save=save,
         output_filename=output_filename,
+        mc_summary=mc_summary,
+        cluster_summary=cluster_summary,
     )
 
     return report

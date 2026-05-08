@@ -11,7 +11,7 @@ import pandas as pd
 
 from datetime import datetime
 from sklearn.metrics import accuracy_score, confusion_matrix
-from sklearn.model_selection import train_test_split, cross_val_score, TimeSeriesSplit
+from sklearn.model_selection import train_test_split, cross_val_score, TimeSeriesSplit, GridSearchCV
 from sklearn.tree import DecisionTreeClassifier
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,9 @@ SAFE_FEATURES = [
     "is_oct",
     "is_nov",
     "is_dec",
+    # Volatility features
+    "vwap_deviation",
+    "vol_regime",
     # Monte Carlo features
     "mc_1d_q1",
     "mc_1d_q5",
@@ -200,24 +203,48 @@ class OvernightDirectionModel:
 
         logger.info("Training model...")
 
-        # initialize model
-        self.model = DecisionTreeClassifier(
-            max_depth=self.config["max_depth"],
-            min_samples_leaf=self.config["min_samples_leaf"],
-            min_samples_split=self.config["min_samples_split"],
-            class_weight=self.config["class_weight"],
-            random_state=self.config["random_state"],
+        # base model
+        base_model = DecisionTreeClassifier(
+            max_depth=self.config.get("max_depth", 5),
+            min_samples_leaf=self.config.get("min_samples_leaf", 10),
+            min_samples_split=self.config.get("min_samples_split", 20),
+            class_weight=self.config.get("class_weight", "balanced"),
+            random_state=self.config.get("random_state", 42),
         )
 
-        # cross validation
-        cv_score = cross_val_score(
-            self.model, X_train, y_train, cv=TimeSeriesSplit(n_splits=self.config["cv"])
-        )
+        # TimeSeriesSplit cross validation to prevent look-ahead leakage
+        tscv = TimeSeriesSplit(n_splits=self.config.get("cv", 5))
 
-        logger.info(f"✓ CV accuracy: {cv_score.mean():.3f} (+/- {cv_score.std():.3f})")
+        # Check for hyperparameter tuning (Task 5.4)
+        tuning_config = self.config.get("tuning", {})
+        if tuning_config.get("enabled", False):
+            logger.info("Hyperparameter tuning enabled. Running GridSearchCV...")
+            param_grid = tuning_config.get("param_grid", {
+                "max_depth": [3, 5, 8, 12],
+                "min_samples_leaf": [5, 10, 20],
+                "min_samples_split": [10, 20, 40]
+            })
+            
+            grid_search = GridSearchCV(
+                estimator=base_model,
+                param_grid=param_grid,
+                cv=tscv,
+                scoring="accuracy",
+                n_jobs=-1
+            )
+            grid_search.fit(X_train, y_train)
+            
+            self.model = grid_search.best_estimator_
+            self.best_params = grid_search.best_params_
+            logger.info(f"✓ Best parameters: {self.best_params}")
+            logger.info(f"✓ Best CV accuracy: {grid_search.best_score_:.3f}")
+        else:
+            self.model = base_model
+            cv_score = cross_val_score(self.model, X_train, y_train, cv=tscv)
+            logger.info(f"✓ CV accuracy: {cv_score.mean():.3f} (+/- {cv_score.std():.3f})")
+            self.model.fit(X_train, y_train)
+            self.best_params = None
 
-        # fit model and store timestamp
-        self.model.fit(X_train, y_train)
         self.trained_date = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
 
         logger.info(f"✓ Model trained")
