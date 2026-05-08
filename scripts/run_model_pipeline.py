@@ -131,6 +131,33 @@ def _run_training(ticker, paths, config, logger):
     return True
 
 
+def _get_data_summaries(df, config):
+    """
+    Extract MC and Cluster summaries from DataFrame if columns exist.
+    """
+    mc_summary = None
+    cluster_summary = None
+    
+    # Monte Carlo summary
+    mc_cols = [col for col in df.columns if col.startswith("mc_")]
+    if mc_cols:
+        from qusa.features.monte_carlo import MonteCarloFeatures
+        mc = MonteCarloFeatures(config=config.get("monte_carlo", {}))
+        mc_summary = mc.get_feature_summary_string(df)
+        
+    # Cluster summary (simplified extraction from data)
+    if "cluster" in df.columns:
+        cluster_stats = df.groupby("cluster").agg(
+            count=("cluster", "size"),
+            mean_overnight=("overnight_delta_pct", "mean"),
+            mean_volume=("volume_ratio", "mean")
+        )
+        cluster_summary = "Cluster Summary from Data:\n"
+        cluster_summary += str(cluster_stats)
+        
+    return mc_summary, cluster_summary
+
+
 def _run_evaluation(ticker, paths, config, logger):
     model_path = paths["model_output_dir"] / f"{ticker.lower()}_model.pkl"
     eval_data_path = paths["processed_data_dir"] / f"{ticker}_processed.csv"

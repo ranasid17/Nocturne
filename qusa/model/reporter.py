@@ -117,7 +117,7 @@ class StrategyReporter:
             return f"[LLM Error: {str(e)}]"
 
     def generate_backtest_report(
-        self, ticker, metrics, backtest_results=None, save=None, output_filename=None
+        self, ticker, metrics, backtest_results=None, save=None, output_filename=None, mc_summary=None, cluster_summary=None
     ):
         """
         Generate backtest report using Ollama-hosted LLM.
@@ -128,6 +128,8 @@ class StrategyReporter:
             3) backtest_results (pd.DataFrame, optional): Full backtest results
             4) save (bool, optional): Whether to save report (uses default if None)
             5) output_filename (str, optional): Custom output filename
+            6) mc_summary (str, optional): Additional Monte Carlo context
+            7) cluster_summary (str, optional): Additional clustering context
 
         Returns:
             1) report (str): Generated report text
@@ -157,6 +159,12 @@ class StrategyReporter:
         prompt = (
             f"Analyze these backtest results and provide insights:\n\n{metrics_summary}"
         )
+        
+        if mc_summary:
+            prompt += f"\n\nMonte Carlo Context:\n{mc_summary}"
+        if cluster_summary:
+            prompt += f"\n\nClustering Context (Market Regimes):\n{cluster_summary}"
+
         report = self._call_llm(prompt, system_prompt)
 
         # determine if save LLM report
@@ -180,6 +188,10 @@ class StrategyReporter:
                 f.write(f"BACKTEST REPORT: {ticker}\n")
                 f.write("=" * 80 + "\n\n")
                 f.write(metrics_summary)
+                if mc_summary:
+                    f.write(f"\nMC CONTEXT:\n{mc_summary}\n")
+                if cluster_summary:
+                    f.write(f"\nCLUSTER CONTEXT:\n{cluster_summary}\n")
                 f.write("\n" + "=" * 80 + "\n")
                 f.write("ANALYSIS\n")
                 f.write("=" * 80 + "\n\n")
@@ -190,7 +202,7 @@ class StrategyReporter:
         return report
 
     def generate_evaluation_report(
-        self, ticker, metrics, save=None, output_filename=None
+        self, ticker, metrics, save=None, output_filename=None, mc_summary=None, cluster_summary=None
     ):
         """
         Generate narrative report from model evaluation metrics.
@@ -200,6 +212,8 @@ class StrategyReporter:
             2) metrics (dict): Evaluation metrics
             3) save (bool, optional): Whether to save report
             4) output_filename (str, optional): Custom output filename
+            5) mc_summary (str, optional): Additional Monte Carlo context
+            6) cluster_summary (str, optional): Additional clustering context
 
         Returns:
             1) str: Generated report text
@@ -236,6 +250,12 @@ class StrategyReporter:
 
         # assemble user prompt and pass to LLM
         prompt = f"Evaluate this trading model's performance:\n\n{metrics_summary}"
+        
+        if mc_summary:
+            prompt += f"\n\nMonte Carlo Context:\n{mc_summary}"
+        if cluster_summary:
+            prompt += f"\n\nClustering Context (Market Regimes):\n{cluster_summary}"
+
         report = self._call_llm(prompt, system_prompt)
 
         # determine if save LLM report
@@ -258,6 +278,10 @@ class StrategyReporter:
                 f.write(f"EVALUATION REPORT: {ticker}\n")
                 f.write("=" * 80 + "\n\n")
                 f.write(metrics_summary)
+                if mc_summary:
+                    f.write(f"\nMC CONTEXT:\n{mc_summary}\n")
+                if cluster_summary:
+                    f.write(f"\nCLUSTER CONTEXT:\n{cluster_summary}\n")
                 f.write("\n" + "=" * 80 + "\n")
                 f.write("ANALYSIS\n")
                 f.write("=" * 80 + "\n\n")

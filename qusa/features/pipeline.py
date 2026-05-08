@@ -4,6 +4,7 @@ from qusa.features.overnight import OvernightCalculator
 from qusa.features.calendar import CalendarFeatures
 from qusa.features.technical import TechnicalIndicators
 from qusa.features.monte_carlo import MonteCarloFeatures
+from qusa.features.volatility import VolatilityCalculator
 
 
 class FeaturePipeline:
@@ -28,6 +29,9 @@ class FeaturePipeline:
         )
         self.calendar_features = CalendarFeatures(
             date_col=self.config.get("date_col", "date")
+        )
+        self.volatility_calculator = VolatilityCalculator(
+            config=self.config.get("features", {})
         )
         self.technical_indicators = TechnicalIndicators(
             config=self.config.get("technical_params", {}),

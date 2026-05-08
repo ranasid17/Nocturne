@@ -367,6 +367,30 @@ class ClusterAnalyzer:
 
         return new_cluster_labels
 
+    def get_cluster_summary_string(self, df):
+        """
+        Return a summary string of cluster profiles.
+        """
+        if self.cluster_profiles is None:
+            self._calculate_cluster_profiles(df)
+            
+        summary = "Cluster Profiles Summary:\n"
+        summary += "-" * 60 + "\n"
+        
+        interpretations = self.interpret_clusters(df)
+        
+        for _, row in self.cluster_profiles.iterrows():
+            cluster_label = int(row["cluster"])
+            label = interpretations.get(cluster_label, "Unknown")
+
+            summary += f'\nCluster {cluster_label}: "{label}"\n'
+            summary += f"  Size: {row['count']} days ({row['proportion']*100:.1f}%)\n"
+            summary += f"  Avg overnight delta: {row.get('mean_overnight_delta_pct', 0):.2f}%\n"
+            summary += f"  Avg volume ratio: {row.get('mean_volume_ratio', 1):.2f}x\n"
+            summary += f"  Avg RSI: {row.get('mean_rsi', 50):.1f}\n"
+            
+        return summary
+
     def print_summary(self, df):
         """
         Print a summary of clustering results.
