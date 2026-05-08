@@ -19,21 +19,21 @@ from sklearn.metrics import (
 
 from qusa.model.train import prepare_model_features
 
+logger = logging.getLogger(__name__)
+
 
 class ModelEvaluator:
     """
     Class to evaluate trained ML model.
     """
 
-    def __init__(self, model_path, logger=None):
+    def __init__(self, model_path):
         """
         Class constructor.
 
         Parameters:
             1) model_path (str): Path to saved/trained model
-            2) logger (logging.Logger, optional): Logger instance
         """
-        self.logger = logger or logging.getLogger(__name__)
         self.model_path = os.path.expanduser(model_path)
         self._load_model()
 
@@ -49,7 +49,7 @@ class ModelEvaluator:
         self.features = bundle["features"]
         self.threshold = bundle["threshold"]
 
-        self.logger.info(f"✓ Model loaded")
+        logger.info(f"✓ Model loaded")
 
         return
 
@@ -64,9 +64,9 @@ class ModelEvaluator:
             1) metrics (dict): Evaluation metrics
         """
 
-        print("\n" + "=" * 80)
-        print("MODEL EVALUATION")
-        print("=" * 80)
+        logger.info("\n" + "=" * 80)
+        logger.info("MODEL EVALUATION")
+        logger.info("=" * 80)
 
         # load test data
         data = pd.read_csv(os.path.expanduser(test_data_path))
@@ -175,28 +175,28 @@ class ModelEvaluator:
             1) metrics (dict): fill here
         """
 
-        print(f"\nOverall Metrics:")
-        print(f"  Accuracy:  {metrics['accuracy']:.3f}")
-        print(f"  Precision: {metrics['precision']:.3f}")
-        print(f"  Recall:    {metrics['recall']:.3f}")
-        print(f"  F1 Score:  {metrics['f1']:.3f}")
+        logger.info(f"\nOverall Metrics:")
+        logger.info(f"  Accuracy:  {metrics['accuracy']:.3f}")
+        logger.info(f"  Precision: {metrics['precision']:.3f}")
+        logger.info(f"  Recall:    {metrics['recall']:.3f}")
+        logger.info(f"  F1 Score:  {metrics['f1']:.3f}")
 
         if "confusion_matrix" in metrics:
-            print(f"\nConfusion Matrix:")
-            print(
+            logger.info(f"\nConfusion Matrix:")
+            logger.info(
                 f"  TN: {metrics['true_negatives']:4d}  FP: {metrics['false_positives']:4d}"
             )
-            print(
+            logger.info(
                 f"  FN: {metrics['false_negatives']:4d}  TP: {metrics['true_positives']:4d}"
             )
 
-        print(f"\nHigh-Confidence Predictions (>= {self.threshold}):")
-        print(f"  Coverage: {metrics['high_confidence_coverage']:.1%}")
-        print(f"  Accuracy: {metrics['high_confidence_accuracy']:.3f}")
+        logger.info(f"\nHigh-Confidence Predictions (>= {self.threshold}):")
+        logger.info(f"  Coverage: {metrics['high_confidence_coverage']:.1%}")
+        logger.info(f"  Accuracy: {metrics['high_confidence_accuracy']:.3f}")
 
         if "calibration" in metrics:
-            print(f"\nProbability Calibration:")
-            print(metrics["calibration"])
+            logger.info(f"\nProbability Calibration:")
+            logger.info(f"\n{metrics['calibration']}")
 
         return
 
@@ -217,8 +217,8 @@ def evaluate_model(model_path, eval_data_path):
     evaluator = ModelEvaluator(model_path)
     metrics = evaluator.evaluate(eval_data_path)
 
-    print("\n" + "=" * 80)
-    print("✓ EVALUATION COMPLETE")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ EVALUATION COMPLETE")
+    logger.info("=" * 80)
 
     return metrics

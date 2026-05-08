@@ -13,6 +13,8 @@ import pandas as pd
 
 from qusa.model.train import prepare_model_features
 
+logger = logging.getLogger(__name__)
+
 
 class ModelBacktester:
     """
@@ -20,16 +22,14 @@ class ModelBacktester:
     model predictions.
     """
 
-    def __init__(self, model_path, backtest_data_path, logger=None):
+    def __init__(self, model_path, backtest_data_path):
         """
         Class constructor.
 
         Parameters:
             1) model_path (str): Path to saved/trained model
             2) backtest_data_path (str): Path to data for backtesting
-            3) logger (logging.Logger, optional): Logger instance
         """
-        self.logger = logger or logging.getLogger(__name__)
 
         # store paths to model and dataset as attributes
         self.model_path = os.path.expanduser(model_path)
@@ -50,7 +50,7 @@ class ModelBacktester:
         self.features = bundle["features"]
         self.threshold = bundle["threshold"]
 
-        self.logger.info(f"✓ Model loaded")
+        logger.info(f"✓ Model loaded")
 
     def _load_data(self):
         """
@@ -60,7 +60,7 @@ class ModelBacktester:
         self.data = pd.read_csv(self.backtest_data_path)
         self.data["date"] = pd.to_datetime(self.data["date"])
 
-        self.logger.info(f"✓ Loaded {len(self.data)} days of data")
+        logger.info(f"✓ Loaded {len(self.data)} days of data")
 
     def run_backtest(self, initial_capital, position_size, transaction_cost):
         """
@@ -68,65 +68,51 @@ class ModelBacktester:
         Buy Close -> Sell Open next day if signal is high confidence.
 
         Parameters:
-            1) initial_capital (float): Starting investment capital
-            2) position_size (float): Fraction of capital to use per trade
-            3) transaction_cost (float): Friction cost per side (%)
+            1) initial_capital (float): Starting balance for backtest.
+            2) position_size (float): Proportion of balance to allocate per trade.
+            3) transaction_cost (float): Trading cost per side (%).
         """
 
-        print("\n" + "=" * 80)
-        print(f"RUNNING BACKTEST (Overnight Only | Cost: {transaction_cost}% per side)")
-        print("=" * 80)
+        logger.info("\n" + "=" * 80)
+        logger.info(f"RUNNING BACKTEST (Overnight Only | Cost: {transaction_cost}% per side)")
+        logger.info("=" * 80)
 
-        # 1. Prepare Data
-        x = prepare_model_features(self.data, self.features)
-        predictions = self.model.predict(x)
-        probabilities = self.model.predict_proba(x)[:, 1]
+        # extract features and probabilities for full dataset
+        X = prepare_model_features(self.data, self.features)
+        y_prob = self.model.predict_proba(X)[:, 1]
 
+        # store relevant columns from dataset for backtest
         results = self.data[["date", "close", "overnight_delta"]].copy()
-        results["date"] = pd.to_datetime(results["date"])
-        results["predicted_direction"] = predictions
-        results["predicted_probability"] = probabilities
+        results["probability_up"] = y_prob
 
-        # Confidence thresholding
-        results["high_confidence"] = (
-            results["predicted_probability"] >= self.threshold
-        ) | (results["predicted_probability"] <= (1 - self.threshold))
+        # identify high confidence signals
+        results["signal"] = 0
+        results.loc[results["probability_up"] >= self.threshold, "signal"] = 1
+        results.loc[results["probability_up"] <= (1 - self.threshold), "signal"] = -1
 
-        # 2. Vectorized Return Calculation
-        # Since we always exit next open, we don't need a loop.
+        # calculate returns per trade
+        # Overnight return = (Open_t+1 - Close_t) / Close_t
+        results["overnight_return"] = results["overnight_delta"] / 100
 
-        # Determine direction multiplier: 1 if Long, -1 if Short
-        # Assuming predicted_direction 1 = Long, 0 = Short
-        direction_mult = np.where(results["predicted_direction"] == 1, 1, -1)
+        # simulate strategy
+        results["strategy_return"] = 0.0
+        results["trade_count"] = 0
 
-        # Calculate raw overnight return based on direction
-        raw_overnight_return = results["overnight_delta"] * direction_mult
+        # trade positive signals (long)
+        results.loc[results["signal"] == 1, "strategy_return"] = (
+            results["overnight_return"] - (transaction_cost / 100) * 2
+        ) * position_size
+        results.loc[results["signal"] == 1, "trade_count"] = 1
 
-        # Apply Position Sizing
-        gross_return = raw_overnight_return * position_size
+        # trade negative signals (short)
+        results.loc[results["signal"] == -1, "strategy_return"] = (
+            -results["overnight_return"] - (transaction_cost / 100) * 2
+        ) * position_size
+        results.loc[results["signal"] == -1, "trade_count"] = 1
 
-        # Apply Costs: We pay cost on Entry (Close) and Exit (Open) = 2 * cost
-        round_trip_cost = 2 * transaction_cost
-
-        # Calculate Net Strategy Return (only where we traded)
-        results["strategy_return"] = np.where(
-            results["high_confidence"], gross_return - round_trip_cost, 0.0
-        )
-
-        # Track Trade Execution (for metrics)
-        results["trade_executed"] = results["high_confidence"].astype(int)
-
-        # Trade PnL is the same as strategy return for 1-day hold
-        results["trade_pnl"] = results["strategy_return"]
-
-        # 3. Finalize Portfolio Value
-        # Cumulative Product of Daily Returns
-        # Note: We divide by 100 if returns are in percentage (e.g. 1.5 for 1.5%)
-        # Assuming overnight_delta is standard percentage (e.g., 0.5 = 0.5%)
-        results["cumulative_return"] = (
-            1 + (results["strategy_return"] / 100)
-        ).cumprod()
-        results["portfolio_value"] = initial_capital * results["cumulative_return"]
+        # cumulative performance
+        results["strategy_cumulative"] = (1 + results["strategy_return"]).cumprod()
+        results["strategy_value"] = initial_capital * results["strategy_cumulative"]
 
         # Benchmark (Buy & Hold)
         first_close = results["close"].iloc[0]
@@ -139,157 +125,142 @@ class ModelBacktester:
     def calculate_metrics(self, initial_capital):
         """
         Calculate backtest model performance.
+
+        Parameters:
+            1) initial_capital (float): Starting balance for backtest.
+
+        Returns:
+            1) metrics (dict): Dictionary with backtest metrics.
         """
 
-        print("\n" + "=" * 80)
-        print("PERFORMANCE METRICS")
-        print("=" * 80)
-
         if self.results is None:
-            return {}
+            raise ValueError("Backtest has not been run yet.")
 
-        equity = self.results["portfolio_value"]
+        logger.info("\n" + "=" * 80)
+        logger.info("PERFORMANCE METRICS")
+        logger.info("=" * 80)
 
-        # Extract trades (every high confidence day is a trade now)
-        completed_trades = self.results[self.results["trade_executed"] == 1]
-        trade_pnls = completed_trades["trade_pnl"]
+        # Basic trade metrics
+        total_trades = self.results["trade_count"].sum()
+        winning_trades = (
+            (self.results["trade_count"] == 1) & (self.results["strategy_return"] > 0)
+        ).sum()
+        losing_trades = (
+            (self.results["trade_count"] == 1) & (self.results["strategy_return"] < 0)
+        ).sum()
 
-        # All daily returns (including 0s for non-trading days)
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0
+
+        # Return metrics
+        final_val = self.results["strategy_value"].iloc[-1]
+        bh_final_val = self.results["buy_hold_value"].iloc[-1]
+
+        strategy_return = (final_val - initial_capital) / initial_capital
+        bh_return = (bh_final_val - initial_capital) / initial_capital
+
+        # Risk metrics
         daily_returns = self.results["strategy_return"]
+        annual_vol = daily_returns.std() * np.sqrt(252)
+        sharpe = (
+            (daily_returns.mean() / daily_returns.std() * np.sqrt(252))
+            if daily_returns.std() > 0
+            else 0
+        )
 
-        strategy_value = equity.iloc[-1]
-        buy_hold_value = self.results["buy_hold_value"].iloc[-1]
-
-        strategy_return = (strategy_value - initial_capital) / initial_capital
-        buy_hold_return = (buy_hold_value - initial_capital) / initial_capital
-        alpha = strategy_return - buy_hold_return
-
-        # Win Rate Statistics
-        wins = trade_pnls[trade_pnls > 0]
-        losses = trade_pnls[trade_pnls < 0]
-        win_rate = len(wins) / len(trade_pnls) if len(trade_pnls) > 0 else 0.0
-
-        # Annualized Volatility (Standard Deviation of Daily Returns)
-        if len(daily_returns) > 1:
-            annual_volatility = (daily_returns / 100).std() * np.sqrt(252)
-        else:
-            annual_volatility = 0.0
-
-        # Sharpe Ratio
-        if daily_returns.std() > 0:
-            sharpe = np.sqrt(252) * daily_returns.mean() / daily_returns.std()
-        else:
-            sharpe = 0.0
-
-        # Drawdown
-        running_max = equity.cummax()
-        draw_down = (equity - running_max) / running_max
-        max_draw_down = abs(draw_down.min())
+        # Max drawdown
+        peak = self.results["strategy_value"].cummax()
+        drawdown = (self.results["strategy_value"] - peak) / peak
+        max_dd = drawdown.min()
 
         metrics = {
-            "total_trades": len(trade_pnls),
-            "winning_trades": len(wins),
-            "losing_trades": len(losses),
-            "win_rate": win_rate,
-            "loss_rate": 1 - win_rate,
-            "strategy_value": strategy_value,
-            "buy_hold_value": buy_hold_value,
+            "initial_capital": initial_capital,
+            "final_value": final_val,
+            "strategy_value": final_val,
+            "buy_hold_value": bh_final_val,
             "strategy_return": strategy_return,
-            "buy_hold_return": buy_hold_return,
-            "alpha": alpha,
-            "annual_volatility": annual_volatility,
+            "buy_hold_return": bh_return,
+            "alpha": strategy_return - bh_return,
+            "annual_volatility": annual_vol,
             "sharpe_ratio": sharpe,
-            "max_draw_down": max_draw_down,
+            "max_draw_down": max_dd,
+            "total_trades": int(total_trades),
+            "winning_trades": int(winning_trades),
+            "losing_trades": int(losing_trades),
+            "win_rate": win_rate,
+            "loss_rate": 1 - win_rate if total_trades > 0 else 0,
         }
-
-        self._print_metrics(metrics)
 
         return metrics
 
-    @staticmethod
-    def _print_metrics(metrics):
+    def print_summary(self, metrics):
         """
-        Print performance metrics to console.
+        Pretty print summary metrics.
+
+        Parameters:
+            1) metrics (dict): fill here
         """
-        print("\n" + "=" * 30)
-        print(" BACKTEST SUMMARY")
-        print("=" * 30)
-        print(f"Total Trades:       {metrics['total_trades']}")
-        print(f"Winning Trades:     {metrics['winning_trades']}")
-        print(f"Losing Trades:      {metrics['losing_trades']}")
-        print(f"Win Rate:           {metrics['win_rate'] * 100:.2f}%")
-        print(f"Loss Rate:          {metrics['loss_rate'] * 100:.2f}%")
-        print("-" * 30)
-        print(f"Strategy Return:    {metrics['strategy_return'] * 100:.2f}%")
-        print(f"Buy & Hold Return:  {metrics['buy_hold_return'] * 100:.2f}%")
-        print(f"Alpha:              {metrics['alpha']:.2f}")
-        print("-" * 30)
-        print(f"Final Strategy Val: ${metrics['strategy_value']:,.2f}")
-        print(f"Final Buy & Hold:   ${metrics['buy_hold_value']:,.2f}")
-        print("-" * 30)
-        print(f"Annual Volatility:  {metrics['annual_volatility']:.4f}")
-        print(f"Sharpe Ratio:       {metrics['sharpe_ratio']:.4f}")
-        print(f"Max Draw down:      {metrics['max_draw_down'] * 100:.2f}%")
-        print("=" * 30)
+
+        logger.info("\n" + "=" * 30)
+        logger.info(" BACKTEST SUMMARY")
+        logger.info("=" * 30)
+        logger.info(f"Total Trades:       {metrics['total_trades']}")
+        logger.info(f"Winning Trades:     {metrics['winning_trades']}")
+        logger.info(f"Losing Trades:      {metrics['losing_trades']}")
+        logger.info(f"Win Rate:           {metrics['win_rate'] * 100:.2f}%")
+        logger.info(f"Loss Rate:          {metrics['loss_rate'] * 100:.2f}%")
+        logger.info("-" * 30)
+        logger.info(f"Strategy Return:    {metrics['strategy_return'] * 100:.2f}%")
+        logger.info(f"Buy & Hold Return:  {metrics['buy_hold_return'] * 100:.2f}%")
+        logger.info(f"Alpha:              {metrics['alpha']:.2f}")
+        logger.info("-" * 30)
+        logger.info(f"Final Strategy Val: ${metrics['strategy_value']:,.2f}")
+        logger.info(f"Final Buy & Hold:   ${metrics['buy_hold_value']:,.2f}")
+        logger.info("-" * 30)
+        logger.info(f"Annual Volatility:  {metrics['annual_volatility']:.4f}")
+        logger.info(f"Sharpe Ratio:       {metrics['sharpe_ratio']:.4f}")
+        logger.info(f"Max Draw down:      {metrics['max_draw_down'] * 100:.2f}%")
+        logger.info("=" * 30)
+
+        return
 
     def plot_results(self, save_path):
         """
-        Plot backtest results.
-        """
-        fig, ax = plt.subplots(3, 1, figsize=(12, 10))
+        Plot strategy value over time.
 
-        # plot 1: portfolio value vs buy & hold
-        ax[0].plot(
+        Parameters:
+            1) save_path (str): fill here
+        """
+
+        if self.results is None:
+            raise ValueError("Backtest has not been run yet.")
+
+        plt.figure(figsize=(12, 6))
+
+        # strategy value
+        plt.plot(
             self.results["date"],
-            self.results["portfolio_value"],
-            label="Strategy",
-            color="#0f4c5c",
-            linestyle="--",
+            self.results["strategy_value"],
+            label="Overnight Strategy",
+            color="#274C77",
+            linewidth=2,
         )
-        ax[0].plot(
+
+        # benchmark
+        plt.plot(
             self.results["date"],
             self.results["buy_hold_value"],
-            label="Buy & Hold",
-            color="#9a031e",
+            label="Buy & Hold (Benchmark)",
+            color="#8B90AF",
+            linestyle="--",
+            alpha=0.7,
         )
-        ax[0].set_title("Portfolio Value", fontsize=14)
-        ax[0].set_ylabel("Value ($)", fontsize=12)
-        ax[0].legend()
 
-        # plot 2: draw down
-        cumulative = self.results["portfolio_value"]
-        running_max = cumulative.expanding().max()
-        draw_down = (cumulative - running_max) / running_max * 100
-        ax[1].plot(self.results["date"], draw_down, color="#9a031e")
-        ax[1].fill_between(
-            self.results["date"],
-            draw_down,
-            0,
-            where=(draw_down < 0),
-            color="#ef233c",
-            alpha=0.3,
-        )
-        ax[1].set_title("Draw Down", fontsize=14)
-        ax[1].set_ylabel("Draw Down (%)", fontsize=12)
-
-        # plot 3: trade distribution
-        trades = self.results[self.results["trade_executed"] == 1]
-
-        if not trades.empty:
-            colors = trades["trade_pnl"].apply(
-                lambda x: "#0f4c5c" if x > 0 else "#9a031e"
-            )
-            ax[2].bar(
-                trades["date"],
-                trades["trade_pnl"],
-                color=colors,
-            )
-
-        ax[2].axhline(0, color="black", linestyle="-", linewidth=0.8)
-        ax[2].set_title("Daily Trade Returns (PnL %)", fontsize=14)
-        ax[2].set_xlabel("Date", fontsize=12)
-        ax[2].set_ylabel("Trade Return (%)", fontsize=12)
-
+        # chart formatting
+        plt.title("Strategy Performance vs Benchmark", fontsize=14, fontweight="bold")
+        plt.xlabel("Date", fontsize=12)
+        plt.ylabel("Portfolio Value ($)", fontsize=12)
+        plt.grid(True, alpha=0.3)
+        plt.legend(loc="upper left")
         plt.tight_layout()
 
         # save plot
@@ -297,4 +268,4 @@ class ModelBacktester:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.close()
 
-        print(f"\n✓ Results saved to {save_path}")
+        logger.info(f"\n✓ Results saved to {save_path}")

@@ -3,10 +3,13 @@ PolygonFetcher: central utility for retrieving OHLCV data from Polygon.io.
 Supports fetching latest daily bars, historical ranges, and N-day queries.
 """
 
+import logging
 import os
 import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 
 class PolygonFetcher:

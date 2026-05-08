@@ -1,5 +1,6 @@
 # QUSA/qusa/analysis/clustering.py
 
+import logging
 import numpy as np
 import pandas as pd
 
@@ -7,6 +8,8 @@ from sklearn.cluster import KMeans, DBSCAN
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
+
+logger = logging.getLogger(__name__)
 
 
 class ClusterAnalyzer:
@@ -86,10 +89,10 @@ class ClusterAnalyzer:
         # handle case where no scaler exists yet
         if self.scaler is None:
             self.scaler = StandardScaler()
-            X_scaled = self.scaler.fit_transform(df_features)
+            X_scaled = self.scaler.fit_transform(df_features[available_cols])
         # otherwise use existing scaler
         else:
-            X_scaled = self.scaler.transform(df_features)
+            X_scaled = self.scaler.transform(df_features[available_cols])
 
         return X_scaled, available_cols, df_features["index"].values
 
@@ -164,7 +167,6 @@ class ClusterAnalyzer:
         cluster_labels = model.fit_predict(X_scaled)
 
         # store fitted objects and labels as attributes
-        self.scaler = StandardScaler().fit(X_scaled)
         self.model = model
         self.cluster_labels = cluster_labels
 
@@ -331,8 +333,8 @@ class ClusterAnalyzer:
                     }
                 )
 
-            if not importance:
-                raise ValueError("No valid features found for importance calculation.")
+        if not importance:
+            raise ValueError("No valid features found for importance calculation.")
 
         # convert list to DataFrame and sort by importance
         df_importance = pd.DataFrame(importance)
@@ -358,7 +360,7 @@ class ClusterAnalyzer:
             raise ValueError("Clustering model has not been fitted yet.")
 
         # extract and scale features from new data
-        X_new_scaled = self.prepare_features(new_data, self.feature_columns)
+        X_new_scaled, _, _ = self.prepare_features(new_data, self.feature_columns)
 
         # predict cluster labels using fitted model
         new_cluster_labels = self.model.predict(X_new_scaled)
@@ -377,57 +379,56 @@ class ClusterAnalyzer:
         if self.cluster_profiles is None:
             self._calculate_cluster_profiles(df)
 
-        print("\n" + "=" * 80)
-        print("CLUSTERING ANALYSIS SUMMARY")
-        print("=" * 80)
+        logger.info("\n" + "=" * 80)
+        logger.info("CLUSTERING ANALYSIS SUMMARY")
+        logger.info("=" * 80)
 
-        print(f"\nAlgorithm: {self.algorithm}")
-        print(f"Number of clusters: {self.n_clusters}")
-        print(f"Features used: {len(self.feature_columns)}")
-        print(f"Total observations: {len(df[df['cluster'] >= 0])}")
+        logger.info(f"\nAlgorithm: {self.algorithm}")
+        logger.info(f"Number of clusters: {self.n_clusters}")
+        logger.info(f"Features used: {len(self.feature_columns)}")
+        logger.info(f"Total observations: {len(df[df['cluster'] >= 0])}")
 
         # cluster interpretations
         interpretations = self.interpret_clusters(df)
 
-        print("\n" + "-" * 80)
-        print("CLUSTER PROFILES")
-        print("-" * 80)
+        logger.info("\n" + "-" * 80)
+        logger.info("CLUSTER PROFILES")
+        logger.info("-" * 80)
 
         for _, row in self.cluster_profiles.iterrows():
             cluster_label = int(row["cluster"])
             label = interpretations.get(cluster_label, "Unknown")
 
-            print(f'\nCluster {cluster_label}: "{label}"')
-            print(f"  Size: {row['count']} days ({row['proportion']*100:.1f}%)")
-            print(
+            logger.info(f'\nCluster {cluster_label}: "{label}"')
+            logger.info(f"  Size: {row['count']} days ({row['proportion']*100:.1f}%)")
+            logger.info(
                 f"  Avg overnight delta: {row.get('mean_overnight_delta_pct', 0):.2f}%"
             )
-            print(f"  Avg volume ratio: {row.get('mean_volume_ratio', 1):.2f}x")
-            print(f"  Avg RSI: {row.get('mean_rsi', 50):.1f}")
+            logger.info(f"  Avg volume ratio: {row.get('mean_volume_ratio', 1):.2f}x")
+            logger.info(f"  Avg RSI: {row.get('mean_rsi', 50):.1f}")
 
         # Feature importance
-        print("\n" + "-" * 80)
-        print("FEATURE IMPORTANCE (Top 5)")
-        print("-" * 80)
+        logger.info("\n" + "-" * 80)
+        logger.info("FEATURE IMPORTANCE (Top 5)")
+        logger.info("-" * 80)
 
         importance_df = self.extract_feature_importance()
         for _, row in importance_df.head(5).iterrows():
-            print(f"  {row['feature']}: {row['importance']:.3f}")
+            logger.info(f"  {row['feature']}: {row['importance']:.3f}")
 
         # PCA explained variance
         if self.pca is not None:
-            print("\n" + "-" * 80)
-            print("PCA COMPONENTS")
-            print("-" * 80)
+            logger.info("\n" + "-" * 80)
+            logger.info("PCA COMPONENTS")
+            logger.info("-" * 80)
 
             explained_variance = self.pca.explained_variance_ratio_
             cumulative_variance = np.cumsum(explained_variance)
 
-            print(f"  PC1 explains: {explained_variance[0]:.1%} of variance")
-            print(f"  PC2 explains: {explained_variance[1]:.1%} of variance")
-            print(f"  Total explained: {cumulative_variance[1]:.1%}")
+            logger.info(f"  PC1 explains: {explained_variance[0]:.1%} of variance")
+            logger.info(f"  PC2 explains: {explained_variance[1]:.1%} of variance")
+            logger.info(f"  Total explained: {cumulative_variance[1]:.1%}")
 
-        print("\n" + "=" * 80)
+        logger.info("\n" + "=" * 80)
 
         return
-
