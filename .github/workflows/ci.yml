@@ -26,4 +26,4 @@ jobs:
         run: python -m compileall -q qusa scripts
 
       - name: Run smoke tests
-        run: python -m pytest -q
+        run: python -m pytest -q --cov=qusa --cov-fail-under=40

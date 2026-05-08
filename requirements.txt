@@ -18,3 +18,4 @@ ollama
 
 # testing
 pytest
+pytest-cov
