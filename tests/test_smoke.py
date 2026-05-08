@@ -8,6 +8,9 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
+# Ensure a dummy API key is set for tests
+os.environ.setdefault("POLYGON_API_KEY", "dummy-key-for-tests")
+
 from qusa.features.monte_carlo import MonteCarloFeatures
 from qusa.features.pipeline import FeaturePipeline
 from qusa.model.train import get_safe_features, prepare_model_features
