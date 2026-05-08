@@ -157,6 +157,62 @@ class MonteCarloFeatures:
         finally:
             self.price_col = original_price_col
 
+    def validate_features(self, df):
+        """
+        Validate MC features for data quality.
+
+        Parameters:
+            df (pd.DataFrame): DataFrame with MC features
+
+        Returns:
+            dict: Validation report
+        """
+        report = {"total_rows": len(df), "valid_rows": 0, "nan_rows": 0, "errors": []}
+
+        # Count valid rows
+        mc_cols = [col for col in df.columns if col.startswith("mc_1d_")]
+        if not mc_cols:
+            report["errors"].append("No Monte Carlo feature columns found")
+            report["nan_rows"] = len(df)
+            return report
+
+        valid_mask = df[mc_cols].notna().all(axis=1)
+        report["valid_rows"] = int(valid_mask.sum())
+        report["nan_rows"] = int(len(df) - report["valid_rows"])
+
+        # Check quantile ordering
+        if "mc_1d_q1" in df.columns and "mc_1d_q95" in df.columns:
+            valid_data = df[valid_mask]
+            ordering_violations = (
+                (valid_data["mc_1d_q1"] >= valid_data["mc_1d_q5"])
+                | (valid_data["mc_1d_q5"] >= valid_data["mc_1d_q10"])
+                | (valid_data["mc_1d_q10"] >= valid_data["mc_1d_q50"])
+                | (valid_data["mc_1d_q50"] >= valid_data["mc_1d_q95"])
+            ).sum()
+
+            if ordering_violations > 0:
+                report["errors"].append(
+                    f"Quantile ordering violations: {ordering_violations}"
+                )
+
+        # Check probability bounds
+        if "mc_1d_prob_breakeven" in df.columns:
+            valid_data = df[valid_mask]
+            prob_violations = (
+                (valid_data["mc_1d_prob_breakeven"] < 0)
+                | (valid_data["mc_1d_prob_breakeven"] > 1)
+            ).sum()
+
+            if prob_violations > 0:
+                report["errors"].append(f"Probability out of bounds: {prob_violations}")
+
+        # Check for infinite values
+        inf_count = np.isinf(df[mc_cols]).sum().sum()
+        if inf_count > 0:
+            report["errors"].append(f"Infinite values detected: {inf_count}")
+
+        return report
+
     @staticmethod
     def get_feature_names(horizons=None):
         """

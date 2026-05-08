@@ -100,8 +100,11 @@ def main():
         else:
             logger.info(f"Locating historical data for {ticker}...")
             # Automatically consolidates any fragmented files found
-            data = loader.consolidate_history(ticker)
+            data, skipped = loader.consolidate_history(ticker)
             
+            if skipped:
+                logger.warning(f"⚠ Skipped {len(skipped)} files during consolidation: {skipped}")
+
             if data.empty:
                 logger.error(f"✗ No historical data found for {ticker} in {raw_data_dir}")
                 return 1
