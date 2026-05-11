@@ -30,6 +30,7 @@ from qusa.model import (
 )
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
+from qusa.utils.formatting import format_header, format_box
 
 
 def parse_args():
@@ -98,10 +99,17 @@ def _run_training(ticker, paths, config, logger):
     )
 
     metrics = getattr(model, "metrics", {})
-    logger.info(
-        f"Model training metrics for {ticker}: Accuracy = {metrics.get('accuracy', 0.0):.4f}"
+    results_box = format_box(
+        [
+            f"Accuracy:  {metrics.get('accuracy', 0.0):.4f}",
+            f"Precision: {metrics.get('precision', 0.0):.4f}",
+            f"Recall:    {metrics.get('recall', 0.0):.4f}",
+            f"Model saved to: {model_save_path}"
+        ],
+        title=f"Training Metrics: {ticker}"
     )
-    logger.info(f"Model saved to: {model_save_path}")
+    for line in results_box.split("\n"):
+        logger.info(line)
 
     if _reports_enabled(config, "training"):
         logger.info("Generating training report...")
@@ -295,11 +303,17 @@ def _run_backtest(ticker, paths, config, logger):
     )
 
     metrics = backtester.calculate_metrics(backtest_config["initial_capital"])
-    logger.info(
-        f"Backtest result for {ticker}: "
-        f"Return={metrics.get('strategy_return', 0.0) * 100:.2f}%, "
-        f"Sharpe={metrics.get('sharpe_ratio', 0.0):.2f}"
+    backtest_box = format_box(
+        [
+            f"Strategy Return: {metrics.get('strategy_return', 0.0) * 100:.2f}%",
+            f"Sharpe Ratio:    {metrics.get('sharpe_ratio', 0.0):.2f}",
+            f"Max Drawdown:    {metrics.get('max_draw_down', 0.0) * 100:.2f}%",
+            f"Total Trades:    {len(backtester.results.loc[backtester.results['signal'] != 0])}"
+        ],
+        title=f"Backtest Results: {ticker}"
     )
+    for line in backtest_box.split("\n"):
+        logger.info(line)
 
     if backtest_config.get("save_results", True):
         _save_backtest_artifacts(
@@ -349,18 +363,17 @@ def main():
     skip_evaluation = pipeline_config.get("skip_evaluation", False)
     skip_backtest = pipeline_config.get("skip_backtest", False)
 
-    logger.info("=" * 80)
-    logger.info("STARTING QUSA MODEL PIPELINE")
+    for line in format_header("STARTING QUSA MODEL PIPELINE").split("\n"):
+        logger.info(line)
     logger.info(f"Tickers: {tickers}")
     logger.info(
         "Skips: "
         f"training={skip_training}, evaluation={skip_evaluation}, backtest={skip_backtest}"
     )
-    logger.info("=" * 80)
 
     success_count = 0
     for ticker in tickers:
-        logger.info(f">>> PROCESSING TICKER: {ticker} <<<")
+        logger.info(f"\n>>> PROCESSING TICKER: {ticker} <<<")
 
         try:
             phase_results = []
@@ -390,9 +403,8 @@ def main():
             logger.error(f"Pipeline failed for {ticker}: {exc}", exc_info=True)
             continue
 
-    logger.info("=" * 80)
-    logger.info(f"MODEL PIPELINE COMPLETE: {success_count}/{len(tickers)} tickers successful")
-    logger.info("=" * 80)
+    for line in format_header(f"MODEL PIPELINE COMPLETE: {success_count}/{len(tickers)} SUCCESSFUL").split("\n"):
+        logger.info(line)
 
     return 0 if success_count == len(tickers) else 1
 

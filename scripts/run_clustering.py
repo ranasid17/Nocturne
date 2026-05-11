@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from qusa.analysis.clustering import ClusterAnalyzer
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
+from qusa.utils.formatting import format_header, format_box
 
 
 def parse_args():
@@ -257,9 +258,8 @@ def analyze_clusters(data, analyzer, logger):
         3) logger (logging.Logger): Logger instance.
     """
 
-    logger.info("=" * 80)
-    logger.info("DETAILED CLUSTER ANALYSIS")
-    logger.info("=" * 80)
+    for line in format_header("DETAILED CLUSTER ANALYSIS").split("\n"):
+        logger.info(line)
 
     interpretations = analyzer.interpret_clusters(data)
 
@@ -273,56 +273,27 @@ def analyze_clusters(data, analyzer, logger):
         size = len(cluster_data)
         pct = size / len(data) * 100
 
-        logger.info("-" * 80)
-        logger.info(f"CLUSTER {cluster_label}: {interpretation}")
-        logger.info("-" * 80)
-        logger.info(f"Size: {size} days ({pct:.1f}%)")
-
-        logger.info("Overnight Delta:")
-        logger.info(
-            f"  Mean: {cluster_data['overnight_delta_pct'].mean():.2f}% | "
-            f"Median: {cluster_data['overnight_delta_pct'].median():.2f}% | "
-            f"Std: {cluster_data['overnight_delta_pct'].std():.2f}%"
+        cluster_box = format_box(
+            [
+                f"Interpretation: {interpretation}",
+                f"Size:           {size} days ({pct:.1f}%)",
+                "",
+                "Overnight Delta:",
+                f"  Mean: {cluster_data['overnight_delta_pct'].mean():.2f}% | Median: {cluster_data['overnight_delta_pct'].median():.2f}%",
+                f"  Std:  {cluster_data['overnight_delta_pct'].std():.2f}%",
+                "",
+                "Technical Summary:",
+                f"  Volume Ratio (Mean): {cluster_data['volume_ratio'].mean():.2f}x",
+                f"  RSI (Mean):          {cluster_data['rsi'].mean():.1f}"
+            ],
+            title=f"CLUSTER {cluster_label}",
+            width=70
         )
+        for line in cluster_box.split("\n"):
+            logger.info(line)
 
-        logger.info("Volume:")
-        volume_msg = f"  Mean Ratio: {cluster_data['volume_ratio'].mean():.2f}x"
-        if "volume_spike" in cluster_data.columns:
-            volume_msg += f" | Spikes (>2x): {cluster_data['volume_spike'].sum()} days"
-        logger.info(volume_msg)
-
-        logger.info("RSI:")
-        logger.info(
-            f"  Mean: {cluster_data['rsi'].mean():.1f} | "
-            f"Oversold (<30): {(cluster_data['rsi'] < 30).sum()} | "
-            f"Overbought (>70): {(cluster_data['rsi'] > 70).sum()}"
-        )
-
-        if "abnormal" in cluster_data.columns:
-            abnormal_rate = cluster_data["abnormal"].mean() * 100
-            logger.info(f"Abnormal Overnight Moves: {abnormal_rate:.1f}%")
-        else:
-            logger.debug("Column 'abnormal' not found in cluster data.")
-
-        if "volume_spike" in cluster_data.columns:
-            logger.info(f"Volume Spikes (>2x): {cluster_data['volume_spike'].sum()} days")
-        else:
-            logger.debug("Column 'volume_spike' not found in cluster data.")
-
-        if "day_of_week" in cluster_data.columns:
-            logger.info("Day of Week Distribution:")
-            dow_map = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri"}
-            dow_dist = (
-                cluster_data["day_of_week"].value_counts(normalize=True).sort_index()
-                * 100
-            )
-            for dow, pct in dow_dist.items():
-                if dow in dow_map:
-                    logger.info(f"  {dow_map[dow]}: {pct:.1f}%")
-
-    logger.info("=" * 80)
-    logger.info("END OF CLUSTER ANALYSIS")
-    logger.info("=" * 80)
+    for line in format_header("END OF CLUSTER ANALYSIS").split("\n"):
+        logger.info(line)
 
     return
 
@@ -397,9 +368,8 @@ def main():
         log_file=str(PROJECT_ROOT / "logs" / "clustering.log"),
     )
 
-    logger.info("=" * 80)
-    logger.info("Starting Clustering Analysis Pipeline")
-    logger.info("=" * 80)
+    for line in format_header("Starting Clustering Analysis Pipeline").split("\n"):
+        logger.info(line)
 
     try:
         logger.info("Loading configuration...")
@@ -475,9 +445,8 @@ def main():
         logger.error(f"✗ Failed to save clustered data: {e}")
         return 1
 
-    logger.info("=" * 80)
-    logger.info("✓ CLUSTERING ANALYSIS COMPLETE")
-    logger.info("=" * 80)
+    for line in format_header("CLUSTERING ANALYSIS COMPLETE").split("\n"):
+        logger.info(line)
 
     return 0
 
