@@ -16,6 +16,10 @@ scikit-learn
 joblib
 ollama
 
+# visualization & UI
+streamlit
+plotly
+
 # testing
 pytest
 pytest-cov
