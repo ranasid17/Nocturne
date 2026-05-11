@@ -20,6 +20,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from qusa.data.loader import DataLoader
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
+from qusa.utils.formatting import format_header
 
 
 def parse_args():
@@ -43,6 +44,9 @@ def main():
     ticker = args.ticker.upper()
     
     logger = setup_logger("DataFetcher", log_file=str(PROJECT_ROOT / "logs" / "fetch_data.log"))
+    
+    for line in format_header(f"Fetching Data for {ticker}").split("\n"):
+        logger.info(line)
     
     try:
         config = load_config(PROJECT_ROOT / "qusa" / "utils" / "config.yaml")

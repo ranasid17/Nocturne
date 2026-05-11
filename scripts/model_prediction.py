@@ -113,11 +113,7 @@ def main():
                 # 1. Fetch latest data
                 raw_data_dir = config["data"]["paths"]["raw_data_dir"]
                 loader = DataLoader(raw_data_dir=raw_data_dir)
-                raw_data = loader.load_most_recent(
-                    ticker, 
-                    start=config["data"]["start_date"], 
-                    end=config["data"]["end_date"]
-                )
+                raw_data = loader.load_most_recent(ticker)
                 
                 # 2. Run feature engineering
                 fe_pipeline = FeaturePipeline({
@@ -147,8 +143,12 @@ def main():
             logger.info(
                 f"Predicting using model at {model_path} and data at {processed_data_path}"
             )
-            prediction = make_prediction(str(model_path), str(processed_data_path))
-            logger.info(f"Prediction for {ticker}: {prediction}")
+            prediction = make_prediction(
+                str(model_path), 
+                str(processed_data_path), 
+                ticker=ticker, 
+                logger_obj=logger
+            )
 
             log_entry = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -159,10 +159,6 @@ def main():
                 "probability_up": prediction.get("probability_up"),
                 "confidence": prediction.get("confidence"),
             }
-
-            logger.info(
-                f"Prediction for {ticker}: {prediction.get('direction')} ({prediction.get('confidence')} Confidence)"
-            )
 
             if should_save and prediction_log_file:
                 save_prediction_log(log_entry, prediction_log_file)

@@ -12,6 +12,7 @@ import os
 import pandas as pd
 
 from datetime import datetime
+from qusa.utils.formatting import format_prediction_card
 
 logger = logging.getLogger(__name__)
 
@@ -92,42 +93,25 @@ class LivePredictor:
         return prediction
 
     @staticmethod
-    def print_prediction(prediction):
+    def print_prediction(prediction, ticker=None, logger_obj=None):
         """
         Print formatted prediction.
 
         Parameters:
             1) prediction (dict): Model prediction on most-recent data
+            2) ticker (str): Ticker symbol
+            3) logger_obj (logging.Logger): Logger instance to use
         """
-
-        logger.info("\n" + "=" * 80)
-        logger.info("PREDICTION")
-        logger.info("=" * 80)
-
-        if prediction["date"]:
-            logger.info(f"Date: {prediction['date']}")
-
-        logger.info(f"Direction: {prediction['direction']}")
-        logger.info(f"Probability (UP): {prediction['probability_up']:.1%}")
-        logger.info(f"Confidence: {prediction['confidence']}")
-
-        # handle cases with high prediction confidence
-        if prediction["confidence"] == "HIGH":
-            # handle case where high confidence positive prediction
-            if prediction["prediction"] == 1:
-                logger.info("\n✓ STRONG BUY signal")
-            # otherwise high confidence negative prediction
-            else:
-                logger.info("\n✓ STRONG SELL signal")
-
-        # otherwise low prediction confidence
-        else:
-            logger.info("\n⚠ LOW CONFIDENCE - No clear signal")
+        log = logger_obj or logger
+        card = format_prediction_card(prediction, ticker=ticker)
+        
+        for line in card.split("\n"):
+            log.info(line)
 
         return
 
 
-def make_prediction(model_path, data_path):
+def make_prediction(model_path, data_path, ticker=None, logger_obj=None):
     """
     Use model to predict on most-recent
     input data.
@@ -135,6 +119,8 @@ def make_prediction(model_path, data_path):
     Parameters:
         1) model_path (str): Path to saved/trained model
         2) data_path (str): Path to data with required features
+        3) ticker (str): Ticker symbol
+        4) logger_obj (logging.Logger): Logger instance to use
 
     Returns:
         1) prediction (dict): Model prediction
@@ -151,6 +137,6 @@ def make_prediction(model_path, data_path):
     prediction = predictor.predict(data)
 
     # print prediction
-    predictor.print_prediction(prediction)
+    predictor.print_prediction(prediction, ticker=ticker, logger_obj=logger_obj)
 
     return prediction
