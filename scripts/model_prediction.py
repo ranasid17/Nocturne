@@ -88,7 +88,7 @@ def main():
         data_dir = Path(config["data"]["paths"]["processed_data_dir"]).expanduser()
 
         should_save = config.get("prediction", {}).get("save", True)
-        prediction_log_file = config.get("prediction", {}).get("log_file")
+        prediction_csv_file = config.get("prediction", {}).get("csv_log")
 
     except KeyError as e:
         logger.error(f"✗ Missing configuration key: {e}")
@@ -160,9 +160,13 @@ def main():
                 "confidence": prediction.get("confidence"),
             }
 
-            if should_save and prediction_log_file:
-                save_prediction_log(log_entry, prediction_log_file)
-                logger.info(f"Prediction appended to log: {prediction_log_file}")
+            logger.info(
+                f"Prediction for {ticker}: {prediction.get('direction')} ({prediction.get('confidence')} Confidence)"
+            )
+
+            if should_save and prediction_csv_file:
+                save_prediction_log(log_entry, prediction_csv_file)
+                logger.info(f"Prediction appended to log: {prediction_csv_file}")
 
             success_count += 1
 

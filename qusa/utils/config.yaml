@@ -63,7 +63,8 @@ evaluation:
 # ------------------
 prediction:
   save: true
-  log_file: "~/Projects/qusa/data/predictions/prediction_log.csv"
+  log_file: "~/Projects/qusa/logs/predictions.log"
+  csv_log: "~/Projects/qusa/data/predictions/prediction_log.csv"
 
 # ------------------
 # Backtesting settings
