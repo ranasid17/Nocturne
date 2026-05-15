@@ -111,14 +111,14 @@ with st.sidebar:
     selected_ticker = st.selectbox("Active Asset", options=sorted(list(set(available_tickers))) if available_tickers else ["UPRO"])
     
     st.divider()
-    if st.button("🔄 Refresh Pipeline", use_container_width=True):
+    if st.button("Refresh Pipeline", use_container_width=True):
         with st.spinner("Processing..."):
             run_script("scripts/run_FE_pipeline.py", ["-ticker", selected_ticker, "--fetch"])
 
 # --- Main Content ---
-st.title("📉 QUSA Command Center")
+st.title("QUSA Command Center")
 
-tab_predict, tab_perf, tab_regime = st.tabs(["🎯 Signals", "📊 Performance", "🧩 Regimes"])
+tab_predict, tab_perf, tab_regime = st.tabs(["Signals", "Performance", "Regimes"])
 
 # --- Tab 1: Predictions ---
 with tab_predict:
@@ -141,9 +141,9 @@ with tab_predict:
             
             # Status Box
             if latest['confidence'] == 'HIGH':
-                st.success(f"⚡ **STRATEGIC {latest['direction']} SIGNAL DETECTED**")
+                st.success(f"STRATEGIC {latest['direction']} SIGNAL DETECTED")
             else:
-                st.warning("⚖️ **NO HIGH-CONVICTION SIGNAL PRESENT**")
+                st.warning("NO HIGH-CONVICTION SIGNAL PRESENT")
         else:
             st.info("No intelligence available for selected ticker.")
     
@@ -193,7 +193,6 @@ with tab_perf:
 
         # 2. Interactive Drawdown Chart
         st.markdown("### Risk Analytics")
-        # Calculate drawdown if not present
         if 'drawdown' not in df_bt.columns:
             peak = df_bt['strategy_value'].cummax()
             df_bt['drawdown'] = (df_bt['strategy_value'] - peak) / peak
@@ -212,6 +211,16 @@ with tab_perf:
             fig_dist.add_vline(x=0, line_dash="dash", line_color="#64748b")
             fig_dist.update_layout(template="plotly_white", height=350)
             st.plotly_chart(fig_dist, use_container_width=True)
+
+            # 4. Interactive Trade Timeline
+            st.markdown("### Trade Timeline")
+            trades['outcome'] = np.where(trades['strategy_return'] > 0, 'Win', 'Loss')
+            fig_timeline = px.bar(trades, x="date", y="strategy_return", color="outcome",
+                                 title="Individual Trade Outcomes",
+                                 color_discrete_map={'Win': '#10b981', 'Loss': '#ef4444'},
+                                 labels={'strategy_return': 'Return %', 'date': 'Date'})
+            fig_timeline.update_layout(template="plotly_white", height=350, showlegend=False)
+            st.plotly_chart(fig_timeline, use_container_width=True)
         else:
             st.info("No active trades in this backtest window.")
 
