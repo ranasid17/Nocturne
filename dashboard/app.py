@@ -7,6 +7,8 @@ import plotly.graph_objects as go
 import os
 import subprocess
 import sys
+import json
+import numpy as np
 from pathlib import Path
 from datetime import datetime
 
@@ -24,17 +26,59 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Styling ---
+# --- Professional Styling ---
 st.markdown("""
     <style>
-    .main {
-        background-color: #f5f7f9;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
     }
-    .stMetric {
+    
+    .main {
+        background-color: #f8fafc;
+    }
+    
+    /* Metric Card Styling */
+    div[data-testid="stMetric"] {
         background-color: #ffffff;
         padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e2e8f0;
+        min-width: 180px;
+    }
+
+    /* Metric Label/Value Colors */
+    div[data-testid="stMetricLabel"] {
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+        text-transform: uppercase;
+    }
+    
+    div[data-testid="stMetricValue"] {
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+    }
+
+    /* Section Headers */
+    .section-header {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        margin-top: 1.5rem;
+        border-left: 4px solid #2563eb;
+        padding-left: 1rem;
+    }
+    
+    .status-box {
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        text-align: center;
+        font-weight: 600;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -49,18 +93,12 @@ def run_script(script_path, args):
     """Run a QUSA script via subprocess."""
     cmd = [sys.executable, str(PROJECT_ROOT / script_path)] + args
     result = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)})
-    
-    # If successful but has warnings in stderr, we filter them for cleaner UI feedback
-    if result.returncode == 0 and result.stderr:
-        # Check if it's just warnings or something critical
-        if "UserWarning" in result.stderr and "Error" not in result.stderr and "Exception" not in result.stderr:
-            result.stderr = "" # Clear noise for the UI
-            
     return result
 
 # --- Sidebar ---
 with st.sidebar:
-    st.title("⚙️ Settings")
+    st.image("https://img.icons8.com/fluency/96/combo-chart.png", width=48)
+    st.title("QUSA Intelligence")
     
     config = get_config()
     
@@ -70,184 +108,140 @@ with st.sidebar:
     if raw_dir.exists():
         available_tickers = [f.stem.split('_')[0] for f in raw_dir.glob("*_history.csv")]
     
-    selected_ticker = st.selectbox("Select Ticker", options=sorted(list(set(available_tickers))) if available_tickers else ["UPRO"])
+    selected_ticker = st.selectbox("Active Asset", options=sorted(list(set(available_tickers))) if available_tickers else ["UPRO"])
     
     st.divider()
-    st.subheader("🚀 Quick Actions")
-    if st.button("Fetch & Process Latest Data"):
-        with st.spinner(f"Fetching data for {selected_ticker}..."):
-            res = run_script("scripts/run_FE_pipeline.py", ["-ticker", selected_ticker, "--fetch"])
-            if res.returncode == 0:
-                st.success("Data updated successfully!")
-            else:
-                st.error(f"Failed: {res.stderr}")
-
-    st.divider()
-    st.info("QUSA Quantitative Analysis Framework v0.1")
+    if st.button("Refresh Pipeline", use_container_width=True):
+        with st.spinner("Processing..."):
+            run_script("scripts/run_FE_pipeline.py", ["-ticker", selected_ticker, "--fetch"])
 
 # --- Main Content ---
-st.title("📉 QUSA Command Center")
-st.caption(f"Analyzing {selected_ticker} | Last Refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.title("QUSA Command Center")
 
-tab_predict, tab_perf, tab_regime = st.tabs([
-    "🎯 Live Predictions", 
-    "📊 Performance Analysis", 
-    "🧩 Regime Discovery"
-])
+tab_predict, tab_perf, tab_regime = st.tabs(["Signals", "Performance", "Regimes"])
 
 # --- Tab 1: Predictions ---
 with tab_predict:
-    col1, col2 = st.columns([1, 2])
+    st.markdown('<p class="section-header">Latest Strategic Intelligence</p>', unsafe_allow_html=True)
     
-    with col1:
-        st.subheader("New Prediction")
-        if st.button("Run Live Prediction", type="primary", use_container_width=True):
-            with st.spinner("Calculating..."):
-                res = run_script("scripts/model_prediction.py", ["-ticker", selected_ticker, "--fetch"])
-                if res.returncode == 0:
-                    st.toast("Prediction complete!")
-                else:
-                    st.error(f"Error: {res.stderr}")
+    log_path = Path(config["prediction"].get("csv_log", config["prediction"].get("log_file"))).expanduser()
+    
+    if log_path.exists():
+        df_log = pd.read_csv(log_path).sort_values("timestamp", ascending=False)
+        df_ticker = df_log[df_log['ticker'] == selected_ticker]
         
-        st.write("Recent Activity")
-        log_path = Path(config["prediction"].get("csv_log", config["prediction"].get("log_file"))).expanduser()
-        if log_path.exists():
-            df_log = pd.read_csv(log_path).sort_values("timestamp", ascending=False)
-            st.dataframe(df_log.head(10), use_container_width=True, hide_index=True)
-        else:
-            st.warning("No prediction log found.")
-
-    with col2:
-        st.subheader("Latest Signal")
-        if log_path.exists():
-            # Get latest for this ticker
-            df_ticker = df_log[df_log['ticker'] == selected_ticker]
-            if not df_ticker.empty:
-                latest = df_ticker.iloc[0]
-                
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Direction", latest['direction'])
-                m2.metric("Probability", f"{latest['probability_up']:.1%}")
-                m3.metric("Confidence", latest['confidence'])
-                
-                # Visual Signal
-                if latest['confidence'] == 'HIGH':
-                    color = "green" if "UP" in latest['direction'] else "red"
-                    st.success(f"### 🔥 STRONG {'BUY' if color=='green' else 'SELL'} SIGNAL IDENTIFIED")
-                else:
-                    st.info("### ⚖️ AMBIGUOUS - No strong signal")
+        if not df_ticker.empty:
+            latest = df_ticker.iloc[0]
+            
+            # Metric Row
+            m_col1, m_col2, m_col3 = st.columns(3)
+            m_col1.metric("Market Bias", latest['direction'])
+            m_col2.metric("Upward Prob.", f"{latest['probability_up']:.1%}")
+            m_col3.metric("Conviction", latest['confidence'])
+            
+            # Status Box
+            if latest['confidence'] == 'HIGH':
+                st.success(f"STRATEGIC {latest['direction']} SIGNAL DETECTED")
             else:
-                st.info(f"No recent predictions for {selected_ticker}")
+                st.warning("NO HIGH-CONVICTION SIGNAL PRESENT")
+        else:
+            st.info("No intelligence available for selected ticker.")
+    
+    st.markdown('<p class="section-header">Operational Execution Log</p>', unsafe_allow_html=True)
+    if log_path.exists():
+        st.dataframe(df_log.head(15), use_container_width=True, hide_index=True)
+        
+    if st.button("Generate New Inference", type="primary"):
+        with st.spinner("Running model..."):
+            run_script("scripts/model_prediction.py", ["-ticker", selected_ticker, "--fetch"])
+            st.rerun()
 
 # --- Tab 2: Performance ---
 with tab_perf:
-    st.subheader("Equity Curve & Strategy Metrics")
+    st.markdown('<p class="section-header">Strategy Analytics & Risk Attribution</p>', unsafe_allow_html=True)
     
-    # Load backtest results
     fig_dir = Path(config["data"]["paths"]["figures_dir"]).expanduser()
     bt_files = list(fig_dir.glob(f"backtest_results_{selected_ticker}_*.csv"))
     
     if bt_files:
-        # Get most recent
         latest_bt = max(bt_files, key=os.path.getctime)
         df_bt = pd.read_csv(latest_bt)
         df_bt['date'] = pd.to_datetime(df_bt['date'])
 
-        # Defensive check for required columns
+        # Robust Column Mapping (Handles legacy 'portfolio_value' or new 'strategy_value')
+        if 'strategy_value' not in df_bt.columns and 'portfolio_value' in df_bt.columns:
+            df_bt['strategy_value'] = df_bt['portfolio_value']
+
         required_cols = ['strategy_value', 'buy_hold_value']
-        missing_cols = [c for c in required_cols if c not in df_bt.columns]
+        if all(col in df_bt.columns for col in required_cols):
+            # 1. Equity Curve
+            fig_equity = go.Figure()
+            fig_equity.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['strategy_value'], name='Strategy', line=dict(color='#2563eb', width=2.5)))
+            fig_equity.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['buy_hold_value'], name='B&H', line=dict(color='#94a3b8', dash='dash')))
+            fig_equity.update_layout(title="Cumulative Equity", hovermode="x unified", template="plotly_white", height=400)
+            st.plotly_chart(fig_equity, use_container_width=True)
 
-        if not missing_cols:
-            # Interactive Plotly Chart
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['strategy_value'], name='Strategy', line=dict(color='#2E86C1')))
-            fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['buy_hold_value'], name='Market (Buy & Hold)', line=dict(color='#ABB2B9', dash='dash')))
+            # Metrics Implementation
+            metrics_file = fig_dir / latest_bt.name.replace("results", "metrics").replace(".csv", ".json")
+            if metrics_file.exists():
+                with open(metrics_file, 'r') as f:
+                    m = json.load(f)
+                
+                alpha = m.get('alpha', 0)
+                bg_color = "#9f1239" if alpha < 0 else "#065f46"
+                st.markdown(f"""<style>div[data-testid="stMetric"] {{ background-color: {bg_color} !important; border: none !important; }} div[data-testid="stMetricValue"], div[data-testid="stMetricLabel"], div[data-testid="stMetricDelta"] {{ color: #ffffff !important; }}</style>""", unsafe_allow_html=True)
 
-            fig.update_layout(
-                title=f"Portfolio Performance: {selected_ticker}",
-                xaxis_title="Date",
-                yaxis_title="Portfolio Value ($)",
-                hovermode="x unified",
-                template="plotly_white"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+                p1, p2, p3, p4 = st.columns(4)
+                p1.metric("Total Return", f"{m.get('strategy_return', 0)*100:.1f}%", delta=f"{(m.get('strategy_return', 0) - m.get('buy_hold_return', 0))*100:.1f}% vs B&H")
+                p2.metric("Sharpe", f"{m.get('sharpe_ratio', 0):.2f}")
+                p3.metric("Max DD", f"{abs(m.get('max_draw_down', 0))*100:.1f}%")
+                p4.metric("Alpha", f"{alpha:.4f}")
+
+            # 2. Interactive Drawdown Chart
+            st.markdown("### Risk Analytics")
+            if 'drawdown' not in df_bt.columns:
+                peak = df_bt['strategy_value'].cummax()
+                df_bt['drawdown'] = (df_bt['strategy_value'] - peak) / peak
+
+            fig_dd = go.Figure()
+            fig_dd.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['drawdown'] * 100, fill='tozeroy', name='Drawdown', line=dict(color='#ef4444')))
+            fig_dd.update_layout(title="Strategy Drawdown (%)", yaxis_title="Drawdown %", template="plotly_white", height=300)
+            st.plotly_chart(fig_dd, use_container_width=True)
+
+            # 3. Interactive Trade Distribution
+            st.markdown("### Execution Edge")
+            trades = df_bt[df_bt['strategy_return'] != 0].copy()
+            if not trades.empty:
+                fig_dist = px.histogram(trades, x="strategy_return", nbins=50, title="Trade Return Distribution",
+                                       color_discrete_sequence=['#10b981'], labels={'strategy_return': 'Return'})
+                fig_dist.add_vline(x=0, line_dash="dash", line_color="#64748b")
+                fig_dist.update_layout(template="plotly_white", height=350)
+                st.plotly_chart(fig_dist, use_container_width=True)
+
+                # 4. Interactive Trade Timeline
+                st.markdown("### Trade Timeline")
+                trades['outcome'] = np.where(trades['strategy_return'] > 0, 'Win', 'Loss')
+                fig_timeline = px.bar(trades, x="date", y="strategy_return", color="outcome",
+                                     title="Individual Trade Outcomes",
+                                     color_discrete_map={'Win': '#10b981', 'Loss': '#ef4444'},
+                                     labels={'strategy_return': 'Return %', 'date': 'Date'})
+                fig_timeline.update_layout(template="plotly_white", height=350, showlegend=False)
+                st.plotly_chart(fig_timeline, use_container_width=True)
+            else:
+                st.info("No active trades in this backtest window.")
         else:
-            st.error(f"Selected backtest file is missing required data columns: {', '.join(missing_cols)}")
-            st.info("Try running the model pipeline for this ticker again to generate fresh results.")
-
-        # Metrics Row
-
-        # Try to find matching JSON metrics
-        metrics_file = fig_dir / latest_bt.name.replace("results", "metrics").replace(".csv", ".json")
-        if metrics_file.exists():
-            import json
-            with open(metrics_file, 'r') as f:
-                m = json.load(f)
-            
-            p1, p2, p3, p4 = st.columns(4)
-            
-            # Extract metrics for coloring
-            strat_ret = m.get('strategy_return', 0)
-            bh_ret = m.get('buy_hold_return', 0)
-            alpha = m.get('alpha', 0)
-            sharpe = m.get('sharpe_ratio', 0)
-            mdd = m.get('max_draw_down', 0)
-
-            # Dynamic background color based on Alpha
-            bg_color = "#f8d7da" if alpha < 0 else "#d4edda"
-            st.markdown(f"""
-                <style>
-                div[data-testid="stMetric"] {{
-                    background-color: {bg_color} !important;
-                }}
-                </style>
-            """, unsafe_allow_html=True)
-
-            p1, p2, p3, p4 = st.columns(4)
-
-            p1.metric(
-                "Total Return", 
-                f"{strat_ret*100:.1f}%", 
-                delta=f"{(strat_ret - bh_ret)*100:.1f}% vs B&H"
-            )
-            p2.metric(
-                "Sharpe Ratio", 
-                f"{sharpe:.2f}", 
-                delta=f"{sharpe:.2f}", 
-                delta_color="off" if sharpe == 0 else "normal"
-            )
-            p3.metric(
-                "Max Drawdown", 
-                f"{abs(mdd)*100:.1f}%", 
-                delta=f"{mdd*100:.1f}%", 
-                delta_color="normal"
-            )
-            p4.metric(
-                "Alpha", 
-                f"{alpha:.4f}", 
-                delta=f"{alpha:.4f}"
-            )
+            missing = [c for c in required_cols if c not in df_bt.columns]
+            st.error(f"Missing columns for {selected_ticker}: {', '.join(missing)}")
+            st.info("Please run the model pipeline to regenerate results for this ticker.")
     else:
         st.warning(f"No backtest results found for {selected_ticker}. Run the model pipeline first.")
 
 # --- Tab 3: Regimes ---
 with tab_regime:
-    st.subheader("Market Regime Clustering")
-    
+    st.markdown('<p class="section-header">Market Regime Analysis</p>', unsafe_allow_html=True)
     proc_dir = Path(config["data"]["paths"]["processed_data_dir"]).expanduser()
     cluster_stats_path = proc_dir / "cluster_statistics.json"
-    
     if cluster_stats_path.exists():
-        import json
         with open(cluster_stats_path, 'r') as f:
             stats = json.load(f)
-        
-        # Show profiles
-        st.write("Cluster Profiles")
-        df_stats = pd.DataFrame(stats)
-        st.dataframe(df_stats.style.background_gradient(cmap='RdYlGn', subset=['overnight_delta_mean']), use_container_width=True)
-        
-        # PCA Visualization would go here if we saved the PCA coords
-        st.info("💡 Interactive PCA mapping coming in next update. Current view shows statistical distribution across regimes.")
-    else:
-        st.warning("No cluster statistics found. Run the clustering pipeline first.")
+        st.dataframe(pd.DataFrame(stats).style.background_gradient(cmap='RdYlGn', subset=['overnight_delta_mean']), use_container_width=True)
