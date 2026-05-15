@@ -49,6 +49,13 @@ def run_script(script_path, args):
     """Run a QUSA script via subprocess."""
     cmd = [sys.executable, str(PROJECT_ROOT / script_path)] + args
     result = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)})
+    
+    # If successful but has warnings in stderr, we filter them for cleaner UI feedback
+    if result.returncode == 0 and result.stderr:
+        # Check if it's just warnings or something critical
+        if "UserWarning" in result.stderr and "Error" not in result.stderr and "Exception" not in result.stderr:
+            result.stderr = "" # Clear noise for the UI
+            
     return result
 
 # --- Sidebar ---
@@ -145,22 +152,31 @@ with tab_perf:
         latest_bt = max(bt_files, key=os.path.getctime)
         df_bt = pd.read_csv(latest_bt)
         df_bt['date'] = pd.to_datetime(df_bt['date'])
-        
-        # Interactive Plotly Chart
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['strategy_value'], name='Strategy', line=dict(color='#2E86C1')))
-        fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['buy_hold_value'], name='Market (Buy & Hold)', line=dict(color='#ABB2B9', dash='dash')))
-        
-        fig.update_layout(
-            title=f"Portfolio Performance: {selected_ticker}",
-            xaxis_title="Date",
-            yaxis_title="Portfolio Value ($)",
-            hovermode="x unified",
-            template="plotly_white"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
+
+        # Defensive check for required columns
+        required_cols = ['strategy_value', 'buy_hold_value']
+        missing_cols = [c for c in required_cols if c not in df_bt.columns]
+
+        if not missing_cols:
+            # Interactive Plotly Chart
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['strategy_value'], name='Strategy', line=dict(color='#2E86C1')))
+            fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['buy_hold_value'], name='Market (Buy & Hold)', line=dict(color='#ABB2B9', dash='dash')))
+
+            fig.update_layout(
+                title=f"Portfolio Performance: {selected_ticker}",
+                xaxis_title="Date",
+                yaxis_title="Portfolio Value ($)",
+                hovermode="x unified",
+                template="plotly_white"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.error(f"Selected backtest file is missing required data columns: {', '.join(missing_cols)}")
+            st.info("Try running the model pipeline for this ticker again to generate fresh results.")
+
         # Metrics Row
+
         # Try to find matching JSON metrics
         metrics_file = fig_dir / latest_bt.name.replace("results", "metrics").replace(".csv", ".json")
         if metrics_file.exists():
