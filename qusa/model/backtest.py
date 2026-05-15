@@ -225,28 +225,28 @@ class ModelBacktester:
 
     def plot_results(self, save_path):
         """
-        Plot strategy value over time.
+        Plot comprehensive backtest results: Equity Curve, Drawdown, and Trade Distribution.
 
         Parameters:
-            1) save_path (str): fill here
+            1) save_path (str): Path to save the multi-panel PNG.
         """
 
         if self.results is None:
             raise ValueError("Backtest has not been run yet.")
 
-        plt.figure(figsize=(12, 6))
+        # Set up a 3-panel figure
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 16), gridspec_kw={'height_ratios': [2, 1, 1]})
+        plt.subplots_adjust(hspace=0.4)
 
-        # strategy value
-        plt.plot(
+        # 1. Equity Curve
+        ax1.plot(
             self.results["date"],
             self.results["strategy_value"],
             label="Overnight Strategy",
             color="#274C77",
             linewidth=2,
         )
-
-        # benchmark
-        plt.plot(
+        ax1.plot(
             self.results["date"],
             self.results["buy_hold_value"],
             label="Buy & Hold (Benchmark)",
@@ -254,18 +254,36 @@ class ModelBacktester:
             linestyle="--",
             alpha=0.7,
         )
+        ax1.set_title("Strategy Performance vs Benchmark", fontsize=14, fontweight="bold")
+        ax1.set_ylabel("Portfolio Value ($)", fontsize=12)
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(loc="upper left")
 
-        # chart formatting
-        plt.title("Strategy Performance vs Benchmark", fontsize=14, fontweight="bold")
-        plt.xlabel("Date", fontsize=12)
-        plt.ylabel("Portfolio Value ($)", fontsize=12)
-        plt.grid(True, alpha=0.3)
-        plt.legend(loc="upper left")
-        plt.tight_layout()
+        # 2. Drawdown
+        peak = self.results["strategy_value"].cummax()
+        drawdown = (self.results["strategy_value"] - peak) / peak
+        ax2.fill_between(self.results["date"], drawdown * 100, 0, color="#ef4444", alpha=0.3)
+        ax2.plot(self.results["date"], drawdown * 100, color="#ef4444", linewidth=1)
+        ax2.set_title("Strategy Drawdown (%)", fontsize=12, fontweight="bold")
+        ax2.set_ylabel("Drawdown %", fontsize=10)
+        ax2.grid(True, alpha=0.3)
+
+        # 3. Trade Distribution
+        trades = self.results[self.results['strategy_return'] != 0]['strategy_return']
+        if not trades.empty:
+            ax3.hist(trades, bins=50, color="#2ecc71", alpha=0.7, edgecolor='white')
+            ax3.axvline(0, color="#64748b", linestyle="--", linewidth=1.5)
+            ax3.set_title("Trade Return Distribution", fontsize=12, fontweight="bold")
+            ax3.set_xlabel("Return", fontsize=10)
+            ax3.set_ylabel("Frequency", fontsize=10)
+            ax3.grid(True, alpha=0.3)
+        else:
+            ax3.text(0.5, 0.5, 'No trades executed', horizontalalignment='center', verticalalignment='center')
+            ax3.set_title("Trade Return Distribution", fontsize=12, fontweight="bold")
 
         # save plot
         save_path = os.path.expanduser(save_path)
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.close()
 
-        logger.info(f"\n✓ Results saved to {save_path}")
+        logger.info(f"\n✓ Comprehensive results saved to {save_path}")
