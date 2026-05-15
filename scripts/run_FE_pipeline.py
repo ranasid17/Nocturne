@@ -14,6 +14,7 @@ from qusa.data.loader import DataLoader
 from qusa.features.pipeline import FeaturePipeline
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
+from qusa.utils.formatting import format_header, format_box
 
 
 def parse_args():
@@ -74,9 +75,8 @@ def main():
         "FE_pipeline",
         log_file=str(PROJECT_ROOT / "logs" / "fe_pipeline.log"),
     )
-    logger.info("=" * 80)
-    logger.info("Starting Feature Engineering Pipeline")
-    logger.info("=" * 80)
+    for line in format_header("Starting Feature Engineering Pipeline").split("\n"):
+        logger.info(line)
 
     try:
         logger.info("Loading configuration file...")
@@ -159,16 +159,21 @@ def main():
         logger.error(f"✗ Error saving processed data: {e}")
         return 1
 
-    logger.info("=" * 80)
-    logger.info("Pipeline Execution Summary")
-    logger.info("=" * 80)
-    logger.info(f"  Ticker: {ticker}")
-    logger.info(f"  Source: {raw_data_dir}/{ticker}_history.csv")
-    logger.info(f"  Output: {output_path}")
-    logger.info(f"  Rows processed: {len(processed_data)}")
-    logger.info("=" * 80)
-    logger.info("✓ Pipeline completed successfully!")
-    logger.info("=" * 80)
+    summary_box = format_box(
+        [
+            f"Ticker:    {ticker}",
+            f"Source:    {raw_data_dir}/{ticker}_history.csv",
+            f"Output:    {output_path}",
+            f"Rows:      {len(processed_data)}",
+            f"Shape:     {processed_data.shape}"
+        ],
+        title="Pipeline Execution Summary"
+    )
+    for line in summary_box.split("\n"):
+        logger.info(line)
+
+    for line in format_header("✓ Pipeline completed successfully!").split("\n"):
+        logger.info(line)
 
     return 0
 
