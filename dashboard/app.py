@@ -185,10 +185,47 @@ with tab_perf:
                 m = json.load(f)
             
             p1, p2, p3, p4 = st.columns(4)
-            p1.metric("Total Return", f"{m.get('strategy_return', 0)*100:.1f}%")
-            p2.metric("Sharpe Ratio", f"{m.get('sharpe_ratio', 0):.2f}")
-            p3.metric("Max Drawdown", f"{m.get('max_draw_down', 0)*100:.1f}%")
-            p4.metric("Alpha", f"{m.get('alpha', 0):.4f}")
+            
+            # Extract metrics for coloring
+            strat_ret = m.get('strategy_return', 0)
+            bh_ret = m.get('buy_hold_return', 0)
+            alpha = m.get('alpha', 0)
+            sharpe = m.get('sharpe_ratio', 0)
+            mdd = m.get('max_draw_down', 0)
+
+            # Dynamic background color based on Alpha
+            bg_color = "#f8d7da" if alpha < 0 else "#d4edda"
+            st.markdown(f"""
+                <style>
+                div[data-testid="stMetric"] {{
+                    background-color: {bg_color} !important;
+                }}
+                </style>
+            """, unsafe_allow_html=True)
+
+            p1, p2, p3, p4 = st.columns(4)
+
+                "Total Return", 
+                f"{strat_ret*100:.1f}%", 
+                delta=f"{(strat_ret - bh_ret)*100:.1f}% vs B&H"
+            )
+            p2.metric(
+                "Sharpe Ratio", 
+                f"{sharpe:.2f}", 
+                delta=f"{sharpe:.2f}", 
+                delta_color="off" if sharpe == 0 else "normal"
+            )
+            p3.metric(
+                "Max Drawdown", 
+                f"{abs(mdd)*100:.1f}%", 
+                delta=f"{mdd*100:.1f}%", 
+                delta_color="normal"
+            )
+            p4.metric(
+                "Alpha", 
+                f"{alpha:.4f}", 
+                delta=f"{alpha:.4f}"
+            )
     else:
         st.warning(f"No backtest results found for {selected_ticker}. Run the model pipeline first.")
 
