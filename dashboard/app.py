@@ -168,61 +168,73 @@ with tab_perf:
         df_bt = pd.read_csv(latest_bt)
         df_bt['date'] = pd.to_datetime(df_bt['date'])
 
-        # 1. Equity Curve
-        fig_equity = go.Figure()
-        fig_equity.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['strategy_value'], name='Strategy', line=dict(color='#2563eb', width=2.5)))
-        fig_equity.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['buy_hold_value'], name='B&H', line=dict(color='#94a3b8', dash='dash')))
-        fig_equity.update_layout(title="Cumulative Equity", hovermode="x unified", template="plotly_white", height=400)
-        st.plotly_chart(fig_equity, use_container_width=True)
+        # Robust Column Mapping (Handles legacy 'portfolio_value' or new 'strategy_value')
+        if 'strategy_value' not in df_bt.columns and 'portfolio_value' in df_bt.columns:
+            df_bt['strategy_value'] = df_bt['portfolio_value']
 
-        # Metrics Implementation
-        metrics_file = fig_dir / latest_bt.name.replace("results", "metrics").replace(".csv", ".json")
-        if metrics_file.exists():
-            with open(metrics_file, 'r') as f:
-                m = json.load(f)
-            
-            alpha = m.get('alpha', 0)
-            bg_color = "#9f1239" if alpha < 0 else "#065f46"
-            st.markdown(f"""<style>div[data-testid="stMetric"] {{ background-color: {bg_color} !important; border: none !important; }} div[data-testid="stMetricValue"], div[data-testid="stMetricLabel"], div[data-testid="stMetricDelta"] {{ color: #ffffff !important; }}</style>""", unsafe_allow_html=True)
+        required_cols = ['strategy_value', 'buy_hold_value']
+        if all(col in df_bt.columns for col in required_cols):
+            # 1. Equity Curve
+            fig_equity = go.Figure()
+            fig_equity.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['strategy_value'], name='Strategy', line=dict(color='#2563eb', width=2.5)))
+            fig_equity.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['buy_hold_value'], name='B&H', line=dict(color='#94a3b8', dash='dash')))
+            fig_equity.update_layout(title="Cumulative Equity", hovermode="x unified", template="plotly_white", height=400)
+            st.plotly_chart(fig_equity, use_container_width=True)
 
-            p1, p2, p3, p4 = st.columns(4)
-            p1.metric("Total Return", f"{m.get('strategy_return', 0)*100:.1f}%", delta=f"{(m.get('strategy_return', 0) - m.get('buy_hold_return', 0))*100:.1f}% vs B&H")
-            p2.metric("Sharpe", f"{m.get('sharpe_ratio', 0):.2f}")
-            p3.metric("Max DD", f"{abs(m.get('max_draw_down', 0))*100:.1f}%")
-            p4.metric("Alpha", f"{alpha:.4f}")
+            # Metrics Implementation
+            metrics_file = fig_dir / latest_bt.name.replace("results", "metrics").replace(".csv", ".json")
+            if metrics_file.exists():
+                with open(metrics_file, 'r') as f:
+                    m = json.load(f)
+                
+                alpha = m.get('alpha', 0)
+                bg_color = "#9f1239" if alpha < 0 else "#065f46"
+                st.markdown(f"""<style>div[data-testid="stMetric"] {{ background-color: {bg_color} !important; border: none !important; }} div[data-testid="stMetricValue"], div[data-testid="stMetricLabel"], div[data-testid="stMetricDelta"] {{ color: #ffffff !important; }}</style>""", unsafe_allow_html=True)
 
-        # 2. Interactive Drawdown Chart
-        st.markdown("### Risk Analytics")
-        if 'drawdown' not in df_bt.columns:
-            peak = df_bt['strategy_value'].cummax()
-            df_bt['drawdown'] = (df_bt['strategy_value'] - peak) / peak
+                p1, p2, p3, p4 = st.columns(4)
+                p1.metric("Total Return", f"{m.get('strategy_return', 0)*100:.1f}%", delta=f"{(m.get('strategy_return', 0) - m.get('buy_hold_return', 0))*100:.1f}% vs B&H")
+                p2.metric("Sharpe", f"{m.get('sharpe_ratio', 0):.2f}")
+                p3.metric("Max DD", f"{abs(m.get('max_draw_down', 0))*100:.1f}%")
+                p4.metric("Alpha", f"{alpha:.4f}")
 
-        fig_dd = go.Figure()
-        fig_dd.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['drawdown'] * 100, fill='tozeroy', name='Drawdown', line=dict(color='#ef4444')))
-        fig_dd.update_layout(title="Strategy Drawdown (%)", yaxis_title="Drawdown %", template="plotly_white", height=300)
-        st.plotly_chart(fig_dd, use_container_width=True)
+            # 2. Interactive Drawdown Chart
+            st.markdown("### Risk Analytics")
+            if 'drawdown' not in df_bt.columns:
+                peak = df_bt['strategy_value'].cummax()
+                df_bt['drawdown'] = (df_bt['strategy_value'] - peak) / peak
 
-        # 3. Interactive Trade Distribution
-        st.markdown("### Execution Edge")
-        trades = df_bt[df_bt['strategy_return'] != 0].copy()
-        if not trades.empty:
-            fig_dist = px.histogram(trades, x="strategy_return", nbins=50, title="Trade Return Distribution",
-                                   color_discrete_sequence=['#10b981'], labels={'strategy_return': 'Return'})
-            fig_dist.add_vline(x=0, line_dash="dash", line_color="#64748b")
-            fig_dist.update_layout(template="plotly_white", height=350)
-            st.plotly_chart(fig_dist, use_container_width=True)
+            fig_dd = go.Figure()
+            fig_dd.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['drawdown'] * 100, fill='tozeroy', name='Drawdown', line=dict(color='#ef4444')))
+            fig_dd.update_layout(title="Strategy Drawdown (%)", yaxis_title="Drawdown %", template="plotly_white", height=300)
+            st.plotly_chart(fig_dd, use_container_width=True)
 
-            # 4. Interactive Trade Timeline
-            st.markdown("### Trade Timeline")
-            trades['outcome'] = np.where(trades['strategy_return'] > 0, 'Win', 'Loss')
-            fig_timeline = px.bar(trades, x="date", y="strategy_return", color="outcome",
-                                 title="Individual Trade Outcomes",
-                                 color_discrete_map={'Win': '#10b981', 'Loss': '#ef4444'},
-                                 labels={'strategy_return': 'Return %', 'date': 'Date'})
-            fig_timeline.update_layout(template="plotly_white", height=350, showlegend=False)
-            st.plotly_chart(fig_timeline, use_container_width=True)
+            # 3. Interactive Trade Distribution
+            st.markdown("### Execution Edge")
+            trades = df_bt[df_bt['strategy_return'] != 0].copy()
+            if not trades.empty:
+                fig_dist = px.histogram(trades, x="strategy_return", nbins=50, title="Trade Return Distribution",
+                                       color_discrete_sequence=['#10b981'], labels={'strategy_return': 'Return'})
+                fig_dist.add_vline(x=0, line_dash="dash", line_color="#64748b")
+                fig_dist.update_layout(template="plotly_white", height=350)
+                st.plotly_chart(fig_dist, use_container_width=True)
+
+                # 4. Interactive Trade Timeline
+                st.markdown("### Trade Timeline")
+                trades['outcome'] = np.where(trades['strategy_return'] > 0, 'Win', 'Loss')
+                fig_timeline = px.bar(trades, x="date", y="strategy_return", color="outcome",
+                                     title="Individual Trade Outcomes",
+                                     color_discrete_map={'Win': '#10b981', 'Loss': '#ef4444'},
+                                     labels={'strategy_return': 'Return %', 'date': 'Date'})
+                fig_timeline.update_layout(template="plotly_white", height=350, showlegend=False)
+                st.plotly_chart(fig_timeline, use_container_width=True)
+            else:
+                st.info("No active trades in this backtest window.")
         else:
-            st.info("No active trades in this backtest window.")
+            missing = [c for c in required_cols if c not in df_bt.columns]
+            st.error(f"Missing columns for {selected_ticker}: {', '.join(missing)}")
+            st.info("Please run the model pipeline to regenerate results for this ticker.")
+    else:
+        st.warning(f"No backtest results found for {selected_ticker}. Run the model pipeline first.")
 
 # --- Tab 3: Regimes ---
 with tab_regime:
