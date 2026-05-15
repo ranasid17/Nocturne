@@ -103,7 +103,7 @@ with tab_predict:
                     st.error(f"Error: {res.stderr}")
         
         st.write("Recent Activity")
-        log_path = Path(config["prediction"]["log_file"]).expanduser()
+        log_path = Path(config["prediction"].get("csv_log", config["prediction"].get("log_file"))).expanduser()
         if log_path.exists():
             df_log = pd.read_csv(log_path).sort_values("timestamp", ascending=False)
             st.dataframe(df_log.head(10), use_container_width=True, hide_index=True)
@@ -148,13 +148,13 @@ with tab_perf:
         
         # Interactive Plotly Chart
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['cumulative_strategy_return'], name='Strategy', line=dict(color='#2E86C1')))
-        fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['cumulative_market_return'], name='Market (Buy & Hold)', line=dict(color='#ABB2B9', dash='dash')))
+        fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['strategy_value'], name='Strategy', line=dict(color='#2E86C1')))
+        fig.add_trace(go.Scatter(x=df_bt['date'], y=df_bt['buy_hold_value'], name='Market (Buy & Hold)', line=dict(color='#ABB2B9', dash='dash')))
         
         fig.update_layout(
-            title=f"Cumulative Return: {selected_ticker}",
+            title=f"Portfolio Performance: {selected_ticker}",
             xaxis_title="Date",
-            yaxis_title="Return",
+            yaxis_title="Portfolio Value ($)",
             hovermode="x unified",
             template="plotly_white"
         )
