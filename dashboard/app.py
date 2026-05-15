@@ -205,6 +205,7 @@ with tab_perf:
 
             p1, p2, p3, p4 = st.columns(4)
 
+            p1.metric(
                 "Total Return", 
                 f"{strat_ret*100:.1f}%", 
                 delta=f"{(strat_ret - bh_ret)*100:.1f}% vs B&H"
