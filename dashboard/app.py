@@ -184,8 +184,6 @@ with tab_perf:
             with open(metrics_file, 'r') as f:
                 m = json.load(f)
             
-            p1, p2, p3, p4 = st.columns(4)
-            
             # Extract metrics for coloring
             strat_ret = m.get('strategy_return', 0)
             bh_ret = m.get('buy_hold_return', 0)
@@ -205,6 +203,7 @@ with tab_perf:
 
             p1, p2, p3, p4 = st.columns(4)
 
+            p1.metric(
                 "Total Return", 
                 f"{strat_ret*100:.1f}%", 
                 delta=f"{(strat_ret - bh_ret)*100:.1f}% vs B&H"
