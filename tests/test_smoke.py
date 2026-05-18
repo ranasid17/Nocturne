@@ -14,7 +14,7 @@ os.environ.setdefault("POLYGON_API_KEY", "dummy-key-for-tests")
 
 from qusa.features.monte_carlo import MonteCarloFeatures
 from qusa.features.pipeline import FeaturePipeline
-from qusa.model.train import get_safe_features, prepare_model_features, OvernightDirectionModel
+from qusa.model.train import get_safe_features, prepare_model_features, OvernightDirectionModel, SAFE_FEATURES
 from qusa.utils.config import load_config
 from qusa.analysis.clustering import ClusterAnalyzer
 from qusa.model.evaluate import ModelEvaluator
@@ -532,3 +532,35 @@ def test_mc_index_alignment():
     # 500 + 252 = 752. Rows 500 to 751 are NaN.
     assert result.loc[500:751, "mc_1d_q5"].isna().all()
     assert result.loc[752:999, "mc_1d_q5"].notna().all()
+
+
+def test_model_target_alignment_shifting(tmp_path):
+    """Task 66: Verify model target is shifted to predict NEXT day."""
+    from qusa.model.train import OvernightDirectionModel
+    
+    # Create dummy data
+    data = pd.DataFrame({
+        "date": ["2024-01-01", "2024-01-02", "2024-01-03"],
+        "overnight_delta": [1.0, -2.0, 3.0],  # Day 1: UP, Day 2: DOWN, Day 3: UP
+        "close": [100, 101, 102],
+        "open": [101, 99, 103],
+        "volume": [1000, 1100, 1200]
+    })
+    
+    # Add dummy technical features
+    for f in SAFE_FEATURES:
+        if f not in data.columns:
+            data[f] = 0.0
+            
+    csv_path = tmp_path / "test_alignment.csv"
+    data.to_csv(csv_path, index=False)
+    
+    # Load data via model
+    prepared_data = OvernightDirectionModel.load_data(str(csv_path))
+    
+    # Target for Day 1 should be the delta of Day 2 (Negative -> 0)
+    # Target for Day 2 should be the delta of Day 3 (Positive -> 1)
+    # Day 3 should be dropped (no next day)
+    assert len(prepared_data) == 2
+    assert prepared_data.iloc[0]["target"] == 0
+    assert prepared_data.iloc[1]["target"] == 1

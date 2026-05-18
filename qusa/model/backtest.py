@@ -91,8 +91,12 @@ class ModelBacktester:
         results.loc[results["probability_up"] <= (1 - self.threshold), "signal"] = -1
 
         # calculate returns per trade
-        # Overnight return = (Open_t+1 - Close_t) / Close_t
-        results["overnight_return"] = results["overnight_delta"] / 100
+        # Overnight return for signal at Day T is (Open_T+1 - Close_T) / Close_T
+        # In our data, this is the 'overnight_delta' of the NEXT row.
+        results["overnight_return"] = results["overnight_delta"].shift(-1) / 100
+
+        # Drop the last row as we don't have the next day's open yet
+        results = results.iloc[:-1]
 
         # simulate strategy
         results["strategy_return"] = 0.0
