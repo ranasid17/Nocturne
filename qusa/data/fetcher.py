@@ -147,3 +147,45 @@ class PolygonFetcher:
         if len(df) > n_days:
             return df.tail(n_days).reset_index(drop=True)
         return df
+
+    def fetch_intraday_snapshot(self, ticker):
+        """
+        Fetches the current day's real-time snapshot for a ticker.
+        Used for making predictions while the market is still open.
+        
+        Parameters:
+            1) ticker (str): Ticker symbol.
+            
+        Returns:
+            1) pd.DataFrame: Single-row DataFrame with the day's current OHLCV data.
+        """
+        ticker = ticker.upper()
+        url = f"{self.base_url}/v2/snapshot/locale/us/markets/stocks/tickers/{ticker}"
+        params = {"apiKey": self.api_key}
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        if data.get("status") != "OK":
+            raise ValueError(f"Polygon API returned non-OK status: {data.get('status')}")
+            
+        ticker_data = data.get("ticker", {})
+        day_stats = ticker_data.get("day", {})
+        
+        if not day_stats:
+             raise ValueError(f"No daily snapshot data available for {ticker} at this time.")
+             
+        # Use current local date for the snapshot bar
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        row = {
+            "date": date_str,
+            "open": day_stats.get("o"),
+            "high": day_stats.get("h"),
+            "low": day_stats.get("l"),
+            "close": day_stats.get("c"),
+            "volume": day_stats.get("v")
+        }
+        
+        return pd.DataFrame([row])

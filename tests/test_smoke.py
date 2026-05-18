@@ -3,6 +3,7 @@
 import importlib
 import os
 import pytest
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -532,6 +533,67 @@ def test_mc_index_alignment():
     # 500 + 252 = 752. Rows 500 to 751 are NaN.
     assert result.loc[500:751, "mc_1d_q5"].isna().all()
     assert result.loc[752:999, "mc_1d_q5"].notna().all()
+
+
+def test_polygon_fetcher_intraday_snapshot(monkeypatch):
+    """fetch_intraday_snapshot returns a single row from the snapshot API."""
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+    from qusa.data.fetcher import PolygonFetcher
+
+    fake_snapshot = {
+        "status": "OK",
+        "ticker": {
+            "ticker": "AMZN",
+            "day": {
+                "o": 185.0, "h": 188.0, "l": 184.0, "c": 187.5, "v": 25000000
+            }
+        }
+    }
+
+    with patch("qusa.data.fetcher.requests.get", return_value=_mock_response(fake_snapshot)):
+        fetcher = PolygonFetcher()
+        df = fetcher.fetch_intraday_snapshot("AMZN")
+
+    assert len(df) == 1
+    assert df["close"].iloc[0] == 187.5
+    assert df["date"].iloc[0] == datetime.now().strftime("%Y-%m-%d")
+
+
+def test_data_loader_load_intraday(monkeypatch, tmp_path):
+    """load_intraday merges history and snapshot, keeping the snapshot on overlap."""
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+    from qusa.data.loader import DataLoader
+
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # History contains yesterday
+    history = pd.DataFrame({
+        "date": [yesterday_str],
+        "open": [180.0], "high": [182.0], "low": [179.0], "close": [181.0], "volume": [1000000]
+    })
+    history.to_csv(raw_dir / "AMZN_history.csv", index=False)
+
+    fake_snapshot = {
+        "status": "OK",
+        "ticker": {
+            "ticker": "AMZN",
+            "day": {
+                "o": 182.0, "h": 185.0, "l": 181.0, "c": 184.5, "v": 500000
+            }
+        }
+    }
+
+    with patch("qusa.data.fetcher.requests.get", return_value=_mock_response(fake_snapshot)):
+        loader = DataLoader(raw_data_dir=str(raw_dir))
+        result = loader.load_intraday("AMZN")
+
+    assert len(result) == 2
+    assert result["date"].iloc[-1] == today_str
+    assert result["close"].iloc[-1] == 184.5
 
 
 def test_model_target_alignment_shifting(tmp_path):

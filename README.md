@@ -96,10 +96,10 @@ python scripts/run_model_pipeline.py -ticker UPRO
 
 ### 2. Live Prediction (One-Step)
 
-Once a model is trained, use this command for live "overnight" prediction tests. The `--fetch` flag automates data retrieval and feature engineering in a single step.
+Once a model is trained, use this command for live "overnight" prediction tests. The `--fetch` flag automates data retrieval, and the `--intraday` flag uses real-time snapshot data to generate a prediction before the market close.
 
 ```bash
-python scripts/model_prediction.py -ticker UPRO --fetch
+python scripts/model_prediction.py -ticker UPRO --fetch --intraday
 ```
 
 **Output**:

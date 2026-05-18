@@ -57,9 +57,9 @@ The project follows a sequential data pipeline:
   python scripts/run_model_pipeline.py -ticker <TICKER1> <TICKER2>
   ```
 
-- **Run Live Prediction**:
+- **Run Live Prediction (at Close)**:
   ```bash
-  python scripts/model_prediction.py -ticker <TICKER>
+  python scripts/model_prediction.py -ticker <TICKER> --fetch --intraday
   ```
 
 - **Run Tests**:
