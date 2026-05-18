@@ -39,6 +39,11 @@ def parse_args():
         action="store_true",
         help="Fetch latest data and run feature engineering before prediction.",
     )
+    parser.add_argument(
+        "--intraday",
+        action="store_true",
+        help="Use real-time intraday snapshot instead of the most recent completed day.",
+    )
     return parser.parse_args()
 
 
@@ -107,13 +112,17 @@ def main():
             # ---------------------------------------------------------
             # Automated Fetching and Feature Engineering
             # ---------------------------------------------------------
-            if args.fetch:
-                logger.info(f"--fetch enabled: preparing data for {ticker}...")
+            if args.fetch or args.intraday:
+                logger.info(f"Preparing data for {ticker} (Fetch={args.fetch}, Intraday={args.intraday})...")
                 
-                # 1. Fetch latest data
+                # 1. Fetch data
                 raw_data_dir = config["data"]["paths"]["raw_data_dir"]
                 loader = DataLoader(raw_data_dir=raw_data_dir)
-                raw_data = loader.load_most_recent(ticker)
+                
+                if args.intraday:
+                    raw_data = loader.load_intraday(ticker)
+                else:
+                    raw_data = loader.load_most_recent(ticker)
                 
                 # 2. Run feature engineering
                 fe_pipeline = FeaturePipeline({

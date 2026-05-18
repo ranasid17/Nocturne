@@ -180,3 +180,49 @@ class DataLoader:
         
         history, _ = self.consolidate_history(ticker)
         return history
+
+    def load_intraday(self, ticker):
+        """
+        Fetches the current real-time snapshot and merges it with 
+        consolidated history. Does not persist the snapshot to the 
+        main history file (to avoid partial-day data corruption).
+
+        Parameters:
+            1) ticker (str): Stock ticker symbol.
+
+        Returns:
+            1) pd.DataFrame: Combined historical and intraday data.
+        """
+        ticker = ticker.upper()
+
+        # 1. Consolidate history to ensure we have the most recent completed days
+        history, _ = self.consolidate_history(ticker)
+        
+        if history.empty:
+            self.logger.warning(f"No history found for {ticker}, starting fresh with intraday snapshot.")
+
+        # 2. Fetch real-time snapshot
+        try:
+            snapshot_df = self.fetcher.fetch_intraday_snapshot(ticker)
+            self.logger.info(f"✓ Intraday snapshot fetched for {ticker}")
+        except Exception as e:
+            self.logger.error(f"✗ Failed to fetch intraday snapshot: {e}")
+            return history
+
+        # 3. Merge snapshot into history
+        if history.empty:
+            merged = snapshot_df
+        else:
+            merged = pd.concat([history, snapshot_df], ignore_index=True)
+            
+        merged["date"] = pd.to_datetime(merged["date"])
+        
+        # Deduplicate by date, keeping the LAST entry (the snapshot) if there's an overlap
+        final = (
+            merged.drop_duplicates(subset=["date"], keep="last")
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
+        
+        final["date"] = final["date"].dt.strftime("%Y-%m-%d")
+        return final
