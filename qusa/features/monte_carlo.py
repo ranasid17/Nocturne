@@ -27,13 +27,14 @@ class MonteCarloFeatures:
         """
         self.config = config or {}
 
-        # Extract parameters from config with defaults
-        self.window_size = self.config.get("window_size", 252)
-        self.iterations = self.config.get("iterations", 1000)
+        # Extract parameters from config with robust type casting
+        self.window_size = int(self.config.get("window_size", 252))
+        self.iterations = int(self.config.get("iterations", 1000))
         self.random_seed = self.config.get("random_seed", 42)
-        self.min_data_threshold = self.config.get("min_data_threshold", 252)
+        self.min_data_threshold = int(self.config.get("min_data_threshold", 252))
         self.price_col = self.config.get("price_col", "close")
         self.horizons = self.config.get("horizons", [1])
+        self.batch_size = int(self.config.get("batch_size", 500))  # New: batch size to prevent OOM
         
         # All potential features across all horizons
         self.features = self.get_feature_names(horizons=self.horizons)
@@ -48,12 +49,14 @@ class MonteCarloFeatures:
         Returns:
             pd.Series: Log returns
         """
-        return np.log(prices / prices.shift(1))
+        # Add epsilon to prevent log(0)
+        return np.log(prices.replace(0, np.nan) / prices.shift(1).replace(0, np.nan))
 
     def add_all(self, df):
         """
         Add Monte Carlo features to DataFrame using vectorized simulation.
         Supports multi-horizon forecasting and incremental checkpointing.
+        Uses batch processing to manage memory consumption.
 
         Parameters:
             df (pd.DataFrame): DataFrame with price data
@@ -63,8 +66,7 @@ class MonteCarloFeatures:
         """
         df_modified = df.copy()
 
-        # 1. Check for incremental compute (Task 5.3)
-        # Identify rows where any required MC feature is NaN
+        # 1. Check for incremental compute
         required_cols = self.features
         
         # Initialize missing columns
@@ -82,16 +84,19 @@ class MonteCarloFeatures:
         potential_indices = np.arange(self.min_data_threshold, len(df_modified))
         
         missing_mask = df_modified[required_cols].isna().any(axis=1)
-        valid_indices = [i for i in potential_indices if missing_mask.iloc[i]]
+        valid_indices = np.array([i for i in potential_indices if missing_mask.iloc[i]])
 
-        if not valid_indices:
+        if len(valid_indices) == 0:
             logger.info("MC features already computed, skipping.")
             return df_modified
 
-        logger.info(f"Computing MC features for {len(valid_indices)} rows...")
+        logger.info(f"Computing MC features for {len(valid_indices)} rows in batches of {self.batch_size}...")
 
         # 2. Pre-calculate log returns and rolling stats
-        log_returns = np.log(df_modified[self.price_col] / df_modified[self.price_col].shift(1))
+        # Use epsilon/replace to handle zero prices safely
+        safe_prices = df_modified[self.price_col].replace(0, np.nan)
+        log_returns = np.log(safe_prices / safe_prices.shift(1))
+        
         rolling_mean = log_returns.rolling(window=self.window_size).mean()
         rolling_var = log_returns.rolling(window=self.window_size).var()
         rolling_std = log_returns.rolling(window=self.window_size).std()
@@ -104,44 +109,58 @@ class MonteCarloFeatures:
         np.random.seed(self.random_seed)
         dt = 1 / 252
         
-        # Get parameters for rows to compute
-        comp_drifts = drifts[valid_indices].reshape(1, -1)
-        comp_vols = vols[valid_indices].reshape(1, -1)
-        comp_prices = current_prices[valid_indices].reshape(1, -1)
-        
-        # 3. Iterate over horizons (Task 5.2)
-        for h in self.horizons:
-            shocks = np.random.normal(size=(self.iterations, len(valid_indices)))
+        # 3. Process in batches to manage memory
+        for i in range(0, len(valid_indices), self.batch_size):
+            batch_indices = valid_indices[i : i + self.batch_size]
             
-            T = h * dt
-            drift_term = comp_drifts * T
-            vol_term = comp_vols * np.sqrt(T) * shocks
+            comp_drifts = drifts[batch_indices].reshape(1, -1)
+            comp_vols = vols[batch_indices].reshape(1, -1)
+            comp_prices = current_prices[batch_indices].reshape(1, -1)
             
-            simulated_prices = comp_prices * np.exp(drift_term + vol_term)
-            
-            # 4. Calculate statistics
-            q1 = np.percentile(simulated_prices, 1, axis=0)
-            q5 = np.percentile(simulated_prices, 5, axis=0)
-            q10 = np.percentile(simulated_prices, 10, axis=0)
-            q50 = np.percentile(simulated_prices, 50, axis=0)
-            q95 = np.percentile(simulated_prices, 95, axis=0)
-            expected_values = np.mean(simulated_prices, axis=0)
-            prob_breakeven = np.mean(simulated_prices > comp_prices, axis=0)
-            returns_pct = ((expected_values - comp_prices.flatten()) / comp_prices.flatten()) * 100
-            
-            # 5. Assign back to DataFrame
-            idx_array = df_modified.index[valid_indices]
-            
-            df_modified.loc[idx_array, f"mc_{h}d_q1"] = q1
-            df_modified.loc[idx_array, f"mc_{h}d_q5"] = q5
-            df_modified.loc[idx_array, f"mc_{h}d_q10"] = q10
-            df_modified.loc[idx_array, f"mc_{h}d_q50"] = q50
-            df_modified.loc[idx_array, f"mc_{h}d_q95"] = q95
-            df_modified.loc[idx_array, f"mc_{h}d_return_pct"] = returns_pct
-            df_modified.loc[idx_array, f"mc_{h}d_prob_breakeven"] = prob_breakeven
-            
-            if h == 1:
-                df_modified.loc[idx_array, "mc_1d_expected_value"] = expected_values
+            # 4. Iterate over horizons
+            for h in self.horizons:
+                shocks = np.random.normal(size=(self.iterations, len(batch_indices)))
+                
+                T = h * dt
+                drift_term = comp_drifts * T
+                vol_term = comp_vols * np.sqrt(T) * shocks
+                
+                simulated_prices = comp_prices * np.exp(drift_term + vol_term)
+                
+                # 5. Calculate statistics
+                q1 = np.percentile(simulated_prices, 1, axis=0)
+                q5 = np.percentile(simulated_prices, 5, axis=0)
+                q10 = np.percentile(simulated_prices, 10, axis=0)
+                q50 = np.percentile(simulated_prices, 50, axis=0)
+                q95 = np.percentile(simulated_prices, 95, axis=0)
+                expected_values = np.mean(simulated_prices, axis=0)
+                prob_breakeven = np.mean(simulated_prices > comp_prices, axis=0)
+                
+                # Safe division for returns_pct
+                denom = comp_prices.flatten()
+                returns_pct = np.where(
+                    denom != 0,
+                    ((expected_values - denom) / denom) * 100,
+                    0.0
+                )
+                
+                # 6. Assign back to DataFrame
+                idx_array = df_modified.index[batch_indices]
+                
+                df_modified.loc[idx_array, f"mc_{h}d_q1"] = q1
+                df_modified.loc[idx_array, f"mc_{h}d_q5"] = q5
+                df_modified.loc[idx_array, f"mc_{h}d_q10"] = q10
+                df_modified.loc[idx_array, f"mc_{h}d_q50"] = q50
+                df_modified.loc[idx_array, f"mc_{h}d_q95"] = q95
+                df_modified.loc[idx_array, f"mc_{h}d_return_pct"] = returns_pct
+                df_modified.loc[idx_array, f"mc_{h}d_prob_breakeven"] = prob_breakeven
+                
+                if h == 1:
+                    df_modified.loc[idx_array, "mc_1d_expected_value"] = expected_values
+                
+                # Explicitly clear large temporary arrays
+                del shocks
+                del simulated_prices
 
         return df_modified
 
