@@ -166,7 +166,14 @@ class OvernightDirectionModel:
         ###
 
         logger.info("Preparing data...")
-        data["target"] = (data["overnight_delta"] > 0).astype(int)
+        # SHIFT TARGET: We want Day T features to predict Day T+1 overnight movement.
+        # Since 'overnight_delta' in the CSV is (Open_T - Close_T-1), 
+        # we shift it back by 1 so the target for row T is the jump at T+1.
+        data["target"] = (data["overnight_delta"].shift(-1) > 0).astype(int)
+        
+        # Drop the last row as we don't know the next day's open yet
+        data = data.iloc[:-1]
+
         data = data.dropna(subset=["overnight_delta"])
         data = data.drop(columns=CONFOUND_FEATURES, errors="ignore")
 
