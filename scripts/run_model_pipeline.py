@@ -300,6 +300,7 @@ def _run_backtest(ticker, paths, config, logger):
         initial_capital=backtest_config["initial_capital"],
         position_size=backtest_config["position_size"],
         transaction_cost=backtest_config["transaction_cost"],
+        volatility_filter=backtest_config.get("volatility_filter"),
     )
 
     metrics = backtester.calculate_metrics(backtest_config["initial_capital"])

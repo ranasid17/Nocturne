@@ -62,7 +62,7 @@ class ModelBacktester:
 
         logger.info(f"✓ Loaded {len(self.data)} days of data")
 
-    def run_backtest(self, initial_capital, position_size, transaction_cost):
+    def run_backtest(self, initial_capital, position_size, transaction_cost, volatility_filter=None):
         """
         Simulate backtest with pure Overnight logic.
         Buy Close -> Sell Open next day if signal is high confidence.
@@ -71,6 +71,7 @@ class ModelBacktester:
             1) initial_capital (float): Starting balance for backtest.
             2) position_size (float): Proportion of balance to allocate per trade.
             3) transaction_cost (float): Trading cost per side (%).
+            4) volatility_filter (dict, optional): Volatility filter settings.
         """
 
         logger.info("\n" + "=" * 80)
@@ -83,12 +84,30 @@ class ModelBacktester:
 
         # store relevant columns from dataset for backtest
         results = self.data[["date", "close", "overnight_delta"]].copy()
+        
+        # Keep atr_pct for filtering if it exists
+        if "atr_pct" in self.data.columns:
+            results["atr_pct"] = self.data["atr_pct"]
+            
         results["probability_up"] = y_prob
 
         # identify high confidence signals
         results["signal"] = 0
         results.loc[results["probability_up"] >= self.threshold, "signal"] = 1
         results.loc[results["probability_up"] <= (1 - self.threshold), "signal"] = -1
+
+        # apply volatility filter if enabled
+        results["vol_skipped"] = False
+        if volatility_filter and volatility_filter.get("enabled", False):
+            max_atr = volatility_filter.get("max_atr_pct", 100.0)
+            if "atr_pct" in results.columns:
+                # Identify signals that are being suppressed
+                mask_filter = (results["signal"] != 0) & (results["atr_pct"] > max_atr)
+                results.loc[mask_filter, "vol_skipped"] = True
+                results.loc[mask_filter, "signal"] = 0
+                logger.info(f"⚠ Volatility filter active (max ATR%: {max_atr}%)")
+            else:
+                logger.warning("⚠ Volatility filter enabled but 'atr_pct' column not found in data.")
 
         # calculate returns per trade
         # Overnight return for signal at Day T is (Open_T+1 - Close_T) / Close_T
@@ -146,6 +165,7 @@ class ModelBacktester:
 
         # Basic trade metrics
         total_trades = self.results["trade_count"].sum()
+        skipped_vol_trades = self.results.get("vol_skipped", pd.Series([False]*len(self.results))).sum()
         winning_trades = (
             (self.results["trade_count"] == 1) & (self.results["strategy_return"] > 0)
         ).sum()
@@ -188,6 +208,7 @@ class ModelBacktester:
             "sharpe_ratio": sharpe,
             "max_draw_down": max_dd,
             "total_trades": int(total_trades),
+            "skipped_vol_trades": int(skipped_vol_trades),
             "winning_trades": int(winning_trades),
             "losing_trades": int(losing_trades),
             "win_rate": win_rate,
@@ -208,6 +229,7 @@ class ModelBacktester:
         logger.info(" BACKTEST SUMMARY")
         logger.info("=" * 30)
         logger.info(f"Total Trades:       {metrics['total_trades']}")
+        logger.info(f"Skipped (Vol):      {metrics.get('skipped_vol_trades', 0)}")
         logger.info(f"Winning Trades:     {metrics['winning_trades']}")
         logger.info(f"Losing Trades:      {metrics['losing_trades']}")
         logger.info(f"Win Rate:           {metrics['win_rate'] * 100:.2f}%")

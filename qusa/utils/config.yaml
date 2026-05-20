@@ -75,6 +75,9 @@ backtest:
   transaction_cost: 0.05      # % cost per trade (slippage + spread)
   save_results: true
   save_plots: true
+  volatility_filter:          # Risk management layer
+    enabled: true
+    max_atr_pct: 3.0          # Skip trade if ATR% is above this
 
 # ------------------
 # Reporting settings (LLM-based)

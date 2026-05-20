@@ -48,12 +48,13 @@ class LivePredictor:
 
         return
 
-    def predict(self, data):
+    def predict(self, data, volatility_filter=None):
         """
         Make prediction on most-recent data
 
         Parameters:
             1) data (pd.DataFrame): Data with features
+            2) volatility_filter (dict, optional): Volatility filter settings
 
         Returns:
             1) prediction (dict): Results
@@ -81,6 +82,18 @@ class LivePredictor:
         else:
             confidence = "LOW"
 
+        # check volatility filter
+        vol_triggered = False
+        atr_pct = 0.0
+        if volatility_filter and volatility_filter.get("enabled", False):
+            if "atr_pct" in latest.columns:
+                atr_pct = latest["atr_pct"].iloc[0]
+                max_atr = volatility_filter.get("max_atr_pct", 100.0)
+                if atr_pct > max_atr:
+                    vol_triggered = True
+            else:
+                logger.warning("⚠ Volatility filter enabled but 'atr_pct' column not found in data.")
+
         # store prediction metadata in dictionary
         prediction = {
             "date": latest["date"].iloc[0] if "date" in latest.columns else None,
@@ -88,6 +101,8 @@ class LivePredictor:
             "direction": direction,
             "probability_up": y_prob,
             "confidence": confidence,
+            "volatility_filter_triggered": vol_triggered,
+            "atr_pct": atr_pct
         }
 
         return prediction
@@ -111,7 +126,7 @@ class LivePredictor:
         return
 
 
-def make_prediction(model_path, data_path, ticker=None, logger_obj=None):
+def make_prediction(model_path, data_path, ticker=None, logger_obj=None, volatility_filter=None):
     """
     Use model to predict on most-recent
     input data.
@@ -121,6 +136,7 @@ def make_prediction(model_path, data_path, ticker=None, logger_obj=None):
         2) data_path (str): Path to data with required features
         3) ticker (str): Ticker symbol
         4) logger_obj (logging.Logger): Logger instance to use
+        5) volatility_filter (dict, optional): Volatility filter settings
 
     Returns:
         1) prediction (dict): Model prediction
@@ -134,7 +150,7 @@ def make_prediction(model_path, data_path, ticker=None, logger_obj=None):
     data["date"] = pd.to_datetime(data["date"])
 
     # make prediction
-    prediction = predictor.predict(data)
+    prediction = predictor.predict(data, volatility_filter=volatility_filter)
 
     # print prediction
     predictor.print_prediction(prediction, ticker=ticker, logger_obj=logger_obj)

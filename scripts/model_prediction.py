@@ -147,7 +147,8 @@ def main():
                 str(model_path), 
                 str(processed_data_path), 
                 ticker=ticker, 
-                logger_obj=logger
+                logger_obj=logger,
+                volatility_filter=config["backtest"].get("volatility_filter")
             )
 
             log_entry = {
