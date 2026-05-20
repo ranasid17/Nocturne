@@ -20,7 +20,7 @@ from qusa.utils.config import load_config
 
 # --- Page Config ---
 st.set_page_config(
-    page_title="QUSA Command Center",
+    page_title="Nocturne Command Center",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -90,7 +90,7 @@ def get_config():
     return load_config(str(config_path))
 
 def run_script(script_path, args):
-    """Run a QUSA script via subprocess."""
+    """Run a Nocturne script via subprocess."""
     cmd = [sys.executable, str(PROJECT_ROOT / script_path)] + args
     result = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)})
     return result
@@ -98,7 +98,7 @@ def run_script(script_path, args):
 # --- Sidebar ---
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/combo-chart.png", width=48)
-    st.title("QUSA Intelligence")
+    st.title("Nocturne Intelligence")
     
     config = get_config()
     
@@ -116,7 +116,7 @@ with st.sidebar:
             run_script("scripts/run_FE_pipeline.py", ["-ticker", selected_ticker, "--fetch"])
 
 # --- Main Content ---
-st.title("QUSA Command Center")
+st.title("Nocturne Command Center")
 
 tab_predict, tab_perf, tab_regime = st.tabs(["Signals", "Performance", "Regimes"])
 

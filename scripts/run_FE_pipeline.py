@@ -19,7 +19,7 @@ from qusa.utils.formatting import format_header, format_box
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run QUSA feature engineering for one ticker."
+        description="Run Nocturne feature engineering for one ticker."
     )
     # Standardized ticker flag with -ticker alias
     parser.add_argument(
@@ -75,7 +75,7 @@ def main():
         "FE_pipeline",
         log_file=str(PROJECT_ROOT / "logs" / "fe_pipeline.log"),
     )
-    for line in format_header("Starting Feature Engineering Pipeline").split("\n"):
+    for line in format_header("Starting Nocturne Feature Pipeline").split("\n"):
         logger.info(line)
 
     try:

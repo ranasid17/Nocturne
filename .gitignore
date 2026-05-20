@@ -207,7 +207,7 @@ marimo/_lsp/
 __marimo__/
 
 
-# QUSA  --- IGNORE ---
+# Nocturne  --- IGNORE ---
 data/figures/*
 data/reports/*
 data/raw/*

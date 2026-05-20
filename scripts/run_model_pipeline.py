@@ -2,7 +2,7 @@
 # qusa/qusa/scripts/run_model_pipeline.py
 
 """
-Master model pipeline orchestrator for QUSA.
+Master model pipeline orchestrator for Nocturne.
 Runs model training, evaluation, and backtesting for provided tickers.
 """
 
@@ -35,7 +35,7 @@ from qusa.utils.formatting import format_header, format_box
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run QUSA model training, evaluation, and backtesting."
+        description="Run Nocturne model training, evaluation, and backtesting."
     )
     parser.add_argument(
         "-ticker",
@@ -363,7 +363,7 @@ def main():
     skip_evaluation = pipeline_config.get("skip_evaluation", False)
     skip_backtest = pipeline_config.get("skip_backtest", False)
 
-    for line in format_header("STARTING QUSA MODEL PIPELINE").split("\n"):
+    for line in format_header("STARTING NOCTURNE MODEL PIPELINE").split("\n"):
         logger.info(line)
     logger.info(f"Tickers: {tickers}")
     logger.info(

@@ -24,7 +24,7 @@ from qusa.utils.logger import setup_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Make QUSA predictions for one or more tickers."
+        description="Make Nocturne predictions for one or more tickers."
     )
     parser.add_argument(
         "-ticker", "--ticker",

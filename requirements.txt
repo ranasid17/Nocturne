@@ -1,4 +1,4 @@
-# QUSA/requirements.txt
+# Nocturne/requirements.txt
 
 # data retreival
 requests

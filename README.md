@@ -1,12 +1,12 @@
-# QUSA: Quantitative US Stock Analysis
+# Nocturne: Quantitative Overnight Regime Analysis & Alpha Discovery
 
 A Python-based quantitative analysis framework for feature engineering, signal identification, and pattern discovery 
-in US equity markets. QUSA focuses on overnight price movements, technical indicator analysis, and unsupervised 
-clustering to identify trading regimes.
+in US equity markets. **Nocturne** focuses on overnight price movements (close-to-open gaps), technical indicator analysis, 
+and unsupervised clustering to identify trading regimes.
 
 ## Overview
 
-QUSA provides a comprehensive toolkit for analyzing stock market data through:
+Nocturne provides a comprehensive toolkit for analyzing stock market data through:
 
 - **Feature Engineering**: Calculate technical indicators (RSI, ATR, volume metrics) and calendar-based features
 - **Overnight Analysis**: Identify and analyze overnight price gaps and abnormal movements
@@ -50,8 +50,8 @@ signals beyond traditional technical analysis.
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/qusa.git
-cd qusa
+git clone https://github.com/yourusername/nocturne.git
+cd nocturne
 ```
 
 2. **Install dependencies**:

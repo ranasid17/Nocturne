@@ -19,7 +19,7 @@ from qusa.utils.formatting import format_header, format_box
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run QUSA clustering analysis for one ticker."
+        description="Run Nocturne clustering analysis for one ticker."
     )
     parser.add_argument(
         "-ticker", "--ticker",
@@ -368,7 +368,7 @@ def main():
         log_file=str(PROJECT_ROOT / "logs" / "clustering.log"),
     )
 
-    for line in format_header("Starting Clustering Analysis Pipeline").split("\n"):
+    for line in format_header("Starting Nocturne Clustering Pipeline").split("\n"):
         logger.info(line)
 
     try:

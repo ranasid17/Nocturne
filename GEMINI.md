@@ -1,7 +1,7 @@
-# GEMINI.md - QUSA (Quantitative US Stock Analysis)
+# GEMINI.md - Nocturne (Quantitative Overnight Regime Analysis)
 
 ## Project Overview
-QUSA is a Python-based quantitative analysis framework designed for feature engineering, signal identification, and pattern discovery in US equity markets. Its primary focus is on overnight price movements (close-to-open gaps), technical indicators, and unsupervised clustering to identify trading regimes.
+Nocturne is a Python-based quantitative analysis framework designed for feature engineering, signal identification, and pattern discovery in US equity markets. Its primary focus is on overnight price movements (close-to-open gaps), technical indicators, and unsupervised clustering to identify trading regimes.
 
 ### Main Technologies
 - **Language**: Python 3.8+
