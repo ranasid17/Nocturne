@@ -2,8 +2,11 @@
 
 import argparse
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib import ticker
 import os
 import pandas as pd
+import numpy as np
 import sys
 
 from pathlib import Path
@@ -119,16 +122,20 @@ def plot_pca_clusters(data, pca_X, pca_model, paths, logger):
 
     data_filtered = data.loc[data["cluster"] != -1].copy()
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(10, 7))
     scatter = ax.scatter(
         pca_X[:, 0],
         pca_X[:, 1],
         c=data_filtered["cluster"].values,
-        cmap="tab10",
-        alpha=0.7,
+        cmap="coolwarm", # Professional diverging map
+        alpha=0.8,
+        edgecolors="w",
+        linewidth=0.5
     )
-    cbar = plt.colorbar(scatter, ax=ax)
-    cbar.set_label("Cluster Label", fontsize=12)
+    
+    # Custom integer-only colorbar
+    cbar = plt.colorbar(scatter, ax=ax, ticks=ticker.MaxNLocator(integer=True))
+    cbar.set_label("Regime Label", fontsize=12, fontweight="bold")
 
     var1 = pca_model.explained_variance_ratio_[0] * 100
     var2 = pca_model.explained_variance_ratio_[1] * 100
@@ -158,28 +165,45 @@ def plot_cluster_profiles(analyzer, paths, logger):
         3) logger (logging.Logger): Logger object for logging messages.
     """
 
-    logger.info("Generating cluster profiles heatmap...")
+    logger.info("Generating cluster profiles heatmap (Z-score normalized)...")
 
     profiles = analyzer.cluster_profiles
 
     feature_cols = [
-        col for col in profiles.columns if col not in ["cluster", "count", "percent"]
+        col for col in profiles.columns if col not in ["cluster", "count", "proportion", "percent"]
     ]
 
     heatmap_data = profiles[feature_cols].T
-    heatmap_data.columns = [f"Cluster {int(col)}" for col in profiles["cluster"]]
+    heatmap_data.columns = [f"Regime {int(col)}" for col in profiles["cluster"]]
 
-    heatmap_data.index = [
-        col.replace("_mean", "").replace("_", " ").title() for col in heatmap_data.index
+    # Z-score normalize across clusters for each feature to show RELATIVE importance
+    heatmap_data_norm = heatmap_data.apply(lambda x: (x - x.mean()) / (x.std() + 1e-9), axis=1)
+
+    heatmap_data_norm.index = [
+        col.replace("mean_", "").replace("_", " ").title() for col in heatmap_data_norm.index
     ]
 
-    fig_height = max(6, 0.5 * len(heatmap_data))
-    fig, ax = plt.subplots(figsize=(12, fig_height))
-    cax = ax.matshow(heatmap_data, cmap="viridis", aspect="auto")
-    fig.colorbar(cax)
-    ax.set_xlabel("Clusters", fontsize=12)
-    ax.set_ylabel("Features", fontsize=12)
-    ax.set_title("Cluster Profiles Heatmap", fontsize=14, fontweight="bold")
+    fig_height = max(6, 0.5 * len(heatmap_data_norm))
+    fig, ax = plt.subplots(figsize=(10, fig_height))
+    
+    # Use diverging colormap to show High (+) and Low (-) relative to average
+    cax = ax.matshow(heatmap_data_norm, cmap="RdBu_r", aspect="auto", vmin=-2, vmax=2)
+    
+    # Add colorbar with explanation
+    cbar = fig.colorbar(cax)
+    cbar.set_label("Relative Strength (Z-score)", fontsize=10, fontweight="bold")
+    
+    # Add text annotations for clarity
+    for (i, j), z in np.ndenumerate(heatmap_data_norm):
+        ax.text(j, i, f'{z:.1f}', ha='center', va='center', 
+                color='white' if abs(z) > 1.2 else 'black')
+
+    ax.set_xticks(np.arange(len(heatmap_data_norm.columns)))
+    ax.set_xticklabels(heatmap_data_norm.columns, fontsize=10, fontweight="bold")
+    ax.set_yticks(np.arange(len(heatmap_data_norm.index)))
+    ax.set_yticklabels(heatmap_data_norm.index, fontsize=10)
+    
+    ax.set_title("Regime Profile Heatmap (Relative Strength)", fontsize=14, fontweight="bold", pad=20)
     plt.tight_layout()
 
     fig_path = os.path.join(paths["figures_dir"], "cluster_profiles_heatmap.png")
@@ -206,36 +230,51 @@ def plot_cluster_time_series(data, paths, logger):
     data_filtered = data.loc[data["cluster"] != -1].copy()
     data_filtered["date"] = pd.to_datetime(data_filtered["date"])
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
+    # 1. Scatter plot of overnight delta
     scatter = ax1.scatter(
         data_filtered["date"],
         data_filtered["overnight_delta"],
         c=data_filtered["cluster"],
-        cmap="tab10",
+        cmap="coolwarm",
         alpha=0.7,
+        s=40,
+        edgecolors="w",
+        linewidth=0.3
     )
-    cbar1 = plt.colorbar(scatter, ax=ax1)
-    cbar1.set_label("Cluster Label", fontsize=12)
+    
+    cbar1 = plt.colorbar(scatter, ax=ax1, ticks=ticker.MaxNLocator(integer=True))
+    cbar1.set_label("Regime Label", fontsize=10)
 
-    ax1.axhline(y=0, color="gray", linestyle="--", linewidth=1)
-    ax1.set_xlabel("date", fontsize=12)
-    ax1.set_ylabel("Overnight Delta", fontsize=12)
-    ax1.set_title("Overnight Delta vs Time by Cluster", fontsize=14, fontweight="bold")
+    ax1.axhline(y=0, color="#1e293b", linestyle="--", linewidth=1, alpha=0.5)
+    ax1.set_ylabel("Overnight Delta ($)", fontsize=11)
+    ax1.set_title("Price Gaps by Market Regime", fontsize=13, fontweight="bold")
+    
+    # Date formatting for scatter
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
+    ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+    plt.setp(ax1.get_xticklabels(), rotation=30, ha="right")
 
-    data_filtered["month"] = data_filtered["date"].dt.to_period("M")
+    # 2. Area plot for distribution
+    data_filtered["month_start"] = data_filtered["date"].dt.to_period("M").dt.to_timestamp()
     cluster_counts = (
-        data_filtered.groupby(["month", "cluster"])
+        data_filtered.groupby(["month_start", "cluster"])
         .size()
         .unstack(fill_value=0)
     )
     cluster_props = cluster_counts.div(cluster_counts.sum(axis=1), axis=0)
 
-    cluster_props.plot(kind="area", stacked=True, ax=ax2, colormap="tab10", alpha=0.7)
-    ax2.set_xlabel("Month", fontsize=12)
-    ax2.set_ylabel("Number of Days", fontsize=12)
-    ax2.set_title("Cluster Distribution Over Time", fontsize=14, fontweight="bold")
-    ax2.legend(title="Cluster", bbox_to_anchor=(1.05, 1), loc="upper left")
+    cluster_props.plot(kind="area", stacked=True, ax=ax2, colormap="coolwarm", alpha=0.8)
+    ax2.set_ylabel("Regime Concentration", fontsize=11)
+    ax2.set_title("Regime Shifts Over Time", fontsize=13, fontweight="bold")
+    ax2.legend(title="Regime", bbox_to_anchor=(1.05, 1), loc="upper left", frameon=False)
+    
+    # Date formatting for area plot
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
+    ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+    plt.setp(ax2.get_xticklabels(), rotation=30, ha="right")
+    ax2.set_xlabel("") # Remove redundant label
 
     plt.tight_layout()
 
@@ -309,7 +348,7 @@ def export_cluster_statistics(data, analyzer, paths, logger):
         4) logger (logging.Logger): Logger instance.
     """
 
-    logger.info("Exporting cluster statistics to CSV...")
+    logger.info("Exporting regime statistics to JSON...")
 
     cluster_statistics = []
 
@@ -348,9 +387,9 @@ def export_cluster_statistics(data, analyzer, paths, logger):
 
     df_cluster_stats = pd.DataFrame(cluster_statistics)
 
-    json_path = os.path.join(paths["processed_data_dir"], "cluster_statistics.json")
+    json_path = os.path.join(paths["processed_data_dir"], "regime_statistics.json")
     df_cluster_stats.to_json(json_path, orient="records", indent=4)
-    logger.info(f"✓ Cluster stats exported to JSON → {json_path}")
+    logger.info(f"✓ Regime stats exported to JSON → {json_path}")
 
     return
 
