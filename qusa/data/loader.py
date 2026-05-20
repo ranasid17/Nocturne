@@ -53,7 +53,7 @@ class DataLoader:
         pattern = str(self.raw_dir / f"{ticker}_*.csv")
         all_files = glob.glob(pattern)
         
-        exclude_suffixes = ["_processed.csv", "_clustered.csv", "_latest.csv", "_history.csv"]
+        exclude_suffixes = ["_processed.csv", "_clustered.csv", "_history.csv"]
         source_files = [
             f for f in all_files 
             if not any(f.endswith(suffix) for suffix in exclude_suffixes)
@@ -139,18 +139,12 @@ class DataLoader:
         self.logger.info(f"✓ Latest day fetched → {latest_df['date'].iloc[0]}")
 
         # 2. Consolidate everything
+        # This now picks up the _latest.csv file and merges it into history
         history, _ = self.consolidate_history(ticker)
         
-        # 3. Manually merge the latest day which was just saved to _latest.csv 
-        # (Note: consolidate_history excludes _latest.csv from its scan)
-        if history.empty:
-            merged = latest_df
-        else:
-            merged = pd.concat([history, latest_df], ignore_index=True)
-            
-        merged["date"] = pd.to_datetime(merged["date"])
+        history["date"] = pd.to_datetime(history["date"])
         final = (
-            merged.drop_duplicates(subset=["date"])
+            history.drop_duplicates(subset=["date"])
             .sort_values("date")
             .reset_index(drop=True)
         )
