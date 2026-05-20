@@ -57,10 +57,10 @@ class ClusterAnalyzer:
         if feature_cols is None or len(feature_cols) == 0:
             feature_cols = [
                 "overnight_delta_pct",
-                "intraday_return",
+                "vol_regime",
+                "atr_pct",
                 "volume_ratio",
                 "rsi",
-                "atr_pct",
                 "close_position",
                 "52_week_high_proximity",
                 "52_week_low_proximity",
@@ -277,24 +277,29 @@ class ClusterAnalyzer:
 
             # extract key characteristics for current cluster
             overnight = row.get("mean_overnight_delta_pct", 0)
-            volume = row.get("mean_volume_ratio", 0)
-            rsi = row.get("mean_rsi", 0)
+            vol_regime = row.get("mean_vol_regime", 1.0)
+            atr = row.get("mean_atr_pct", 1.0)
+            volume = row.get("mean_volume_ratio", 1.0)
+            rsi = row.get("mean_rsi", 50)
 
             # interpret with logic rules using feature thresholds
-            if (volume > 1.0) and (abs(overnight) > 2.0):
-                interpretation = "High Volume Spike with Significant Overnight Change"
-            elif (abs(overnight) < 0.5) and (volume < 1.2):
-                interpretation = "Low Volatility, Stable Trading Day"
-            elif (overnight > 1.0) and (rsi > 70):
-                interpretation = "Momentum Up"
-            elif (overnight < -1.0) and (rsi < 30):
-                interpretation = "Momentum Down"
+            if (vol_regime > 1.2) or (atr > 2.0):
+                if volume > 1.5:
+                    interpretation = "High Volatility Panic/Breakout Regime"
+                else:
+                    interpretation = "Elevated Volatility Regime"
+            elif (vol_regime < 0.8) and (volume < 1.0):
+                interpretation = "Low Volatility Consolidation"
+            elif (overnight > 1.0) and (rsi > 65):
+                interpretation = "Bullish Momentum Regime"
+            elif (overnight < -1.0) and (rsi < 35):
+                interpretation = "Bearish Exhaustion Regime"
             elif rsi > 70:
-                interpretation = "Overbought Conditions"
+                interpretation = "Overbought/Toppy"
             elif rsi < 30:
-                interpretation = "Oversold Conditions"
+                interpretation = "Oversold/Value"
             else:
-                interpretation = "Standard Trading Day"
+                interpretation = "Standard Market Dynamics"
 
             interpretations[cluster_label] = interpretation
 
