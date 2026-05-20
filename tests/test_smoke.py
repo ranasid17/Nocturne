@@ -360,8 +360,9 @@ def test_data_loader_merges_latest_onto_history(monkeypatch, tmp_path):
             "AMZN", start="2026-01-01", end="2026-12-31"
         )
 
-    # Latest day file should exist
-    assert (raw_dir / "AMZN_latest.csv").exists()
+    # Latest day file should be archived (not in raw)
+    assert not (raw_dir / "AMZN_latest.csv").exists()
+    assert (raw_dir / "archive" / "AMZN_latest.csv").exists()
 
     # Merged result should have 4 rows (3 history + 1 new), sorted by date
     assert len(merged) == 4
@@ -564,3 +565,40 @@ def test_model_target_alignment_shifting(tmp_path):
     assert len(prepared_data) == 2
     assert prepared_data.iloc[0]["target"] == 0
     assert prepared_data.iloc[1]["target"] == 1
+
+
+def test_data_loader_persists_latest_fetch(monkeypatch, tmp_path):
+    """Task 70: Verify that _latest.csv is merged into history permanently."""
+    monkeypatch.setenv("POLYGON_API_KEY", "test-key")
+    from qusa.data.loader import DataLoader
+
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    
+    # 1. Create initial history
+    history = pd.DataFrame({
+        "date": ["2024-01-01"],
+        "open": [100.0], "high": [101.0], "low": [99.0], "close": [100.5], "volume": [1000]
+    })
+    history_path = raw_dir / "AAPL_history.csv"
+    history.to_csv(history_path, index=False)
+
+    # 2. Mock fetch_latest_day to return 2024-01-02
+    latest_day = pd.DataFrame({
+        "date": ["2024-01-02"],
+        "open": [100.5], "high": [102.0], "low": [100.0], "close": [101.5], "volume": [1100]
+    })
+    
+    with patch("qusa.data.fetcher.PolygonFetcher.fetch_latest_day", return_value=latest_day):
+        loader = DataLoader(raw_data_dir=str(raw_dir))
+        # This calls fetch_latest_day and then consolidate_history
+        result = loader.load_most_recent("AAPL")
+
+    # 3. Check result
+    assert len(result) == 2
+    assert "2024-01-02" in result["date"].values
+
+    # 4. CRITICAL CHECK: Verify history file on disk now contains BOTH days
+    persisted_history = pd.read_csv(history_path)
+    assert len(persisted_history) == 2
+    assert "2024-01-02" in persisted_history["date"].values
