@@ -68,6 +68,18 @@ prediction:
   csv_log: "~/Projects/qusa/data/predictions/prediction_log.csv"
 
 # ------------------
+# Dashboard email notifications
+# ------------------
+email:
+  enabled: true
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  use_tls: true
+  smtp_user_env: "QUSA_SMTP_USER"
+  smtp_password_env: "QUSA_SMTP_PASSWORD"
+  from_email: ""
+
+# ------------------
 # Backtesting settings
 # ------------------
 backtest:
