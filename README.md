@@ -17,6 +17,10 @@ Nocturne provides a comprehensive toolkit for analyzing stock market data throug
 The framework is designed for researchers and quantitative analysts who want to explore pattern-based trading 
 signals beyond traditional technical analysis.
 
+## Roadmap
+
+The product roadmap for the small-team signal app is available in [docs/index.md](docs/index.md). The static review site should be published with GitHub Pages from the `main` branch `/docs` folder.
+
 ## Key Features
 
 ### Feature Engineering
