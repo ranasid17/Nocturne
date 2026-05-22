@@ -25,6 +25,7 @@ features:
   vwap_window: 20
   vol_regime_short_window: 5
   vol_regime_long_window: 20
+  advanced_vol_window: 20
 
 # ------------------
 # Analysis settings
