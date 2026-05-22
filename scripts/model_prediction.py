@@ -39,6 +39,11 @@ def parse_args():
         action="store_true",
         help="Fetch latest data and run feature engineering before prediction.",
     )
+    parser.add_argument(
+        "--volatility",
+        type=float,
+        help="Volatility filter threshold (max ATR%%). Overrides config.",
+    )
     return parser.parse_args()
 
 
@@ -140,6 +145,15 @@ def main():
                 logger.warning(f"Skipping {ticker}: Data not found at {processed_data_path}")
                 continue
 
+            # ---------------------------------------------------------
+            # Volatility Filter Configuration
+            # ---------------------------------------------------------
+            vol_filter = config["backtest"].get("volatility_filter", {"enabled": False}).copy()
+            if args.volatility is not None:
+                vol_filter["enabled"] = True
+                vol_filter["max_atr_pct"] = args.volatility
+                logger.info(f"Using command-line volatility filter: {args.volatility}%")
+
             logger.info(
                 f"Predicting using model at {model_path} and data at {processed_data_path}"
             )
@@ -147,7 +161,8 @@ def main():
                 str(model_path), 
                 str(processed_data_path), 
                 ticker=ticker, 
-                logger_obj=logger
+                logger_obj=logger,
+                volatility_filter=vol_filter
             )
 
             log_entry = {
