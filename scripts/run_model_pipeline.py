@@ -46,6 +46,11 @@ def parse_args():
         required=True,
         help="Ticker symbol(s) to process, for example -ticker AMZN AAPL",
     )
+    parser.add_argument(
+        "--volatility",
+        type=float,
+        help="Volatility filter threshold (max ATR%%). Overrides config.",
+    )
     return parser.parse_args()
 
 
@@ -278,7 +283,7 @@ def _log_experiment_results(ticker, metrics, has_mc_features, config, logger):
     logger.info(f"Experiment logged to {log_path}")
 
 
-def _run_backtest(ticker, paths, config, logger):
+def _run_backtest(ticker, paths, config, logger, volatility_override=None):
     model_path = paths["model_output_dir"] / f"{ticker.lower()}_model.pkl"
     data_path = paths["processed_data_dir"] / f"{ticker}_processed.csv"
 
@@ -290,6 +295,13 @@ def _run_backtest(ticker, paths, config, logger):
         return False
 
     backtest_config = config["backtest"]
+    vol_filter = backtest_config.get("volatility_filter", {"enabled": False}).copy()
+
+    if volatility_override is not None:
+        vol_filter["enabled"] = True
+        vol_filter["max_atr_pct"] = volatility_override
+        logger.info(f"Using command-line volatility filter: {volatility_override}%")
+
     backtester = ModelBacktester(
         model_path=str(model_path),
         backtest_data_path=str(data_path),
@@ -300,8 +312,8 @@ def _run_backtest(ticker, paths, config, logger):
         initial_capital=backtest_config["initial_capital"],
         position_size=backtest_config["position_size"],
         transaction_cost=backtest_config["transaction_cost"],
+        volatility_filter=vol_filter,
     )
-
     metrics = backtester.calculate_metrics(backtest_config["initial_capital"])
     backtest_box = format_box(
         [
@@ -391,7 +403,7 @@ def main():
             if skip_backtest:
                 logger.info("Skipping backtest as per configuration.")
             else:
-                phase_results.append(_run_backtest(ticker, paths, config, logger))
+                phase_results.append(_run_backtest(ticker, paths, config, logger, volatility_override=args.volatility))
 
             if all(phase_results) if phase_results else True:
                 success_count += 1
