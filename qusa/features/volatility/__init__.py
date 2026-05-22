@@ -1,0 +1,1 @@
+from qusa.features.volatility.calculator import VolatilityCalculator

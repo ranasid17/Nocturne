@@ -1,4 +1,4 @@
-# qusa/qusa/features/volatility.py
+# qusa/features/volatility/calculator.py
 
 import pandas as pd
 import numpy as np
@@ -17,6 +17,7 @@ class VolatilityCalculator:
         self.vwap_window = self.config.get("vwap_window", 20)
         self.vol_regime_short = self.config.get("vol_regime_short_window", 5)
         self.vol_regime_long = self.config.get("vol_regime_long_window", 20)
+        self.advanced_vol_window = self.config.get("advanced_vol_window", 20)
 
     def calculate_vwap_deviation(self, df):
         """
@@ -50,10 +51,30 @@ class VolatilityCalculator:
         df_mod["vol_regime"] = vol_short / vol_long
         return df_mod
 
+    def calculate_advanced_vol(self, df, window=20):
+        """
+        Calculate Parkinson and Garman-Klass volatility.
+        """
+        df_mod = df.copy()
+        
+        # Parkinson Volatility
+        pk_val = (1.0 / (4.0 * np.log(2.0))) * np.square(np.log(df_mod["high"] / df_mod["low"]))
+        df_mod["vol_parkinson"] = np.sqrt(pk_val.rolling(window=window).mean())
+        
+        # Garman-Klass Volatility
+        log_hl = np.square(np.log(df_mod["high"] / df_mod["low"]))
+        log_co = np.square(np.log(df_mod["close"] / df_mod["open"]))
+        
+        gk_val = 0.5 * log_hl - (2.0 * np.log(2.0) - 1.0) * log_co
+        df_mod["vol_garman_klass"] = np.sqrt(gk_val.rolling(window=window).mean())
+        
+        return df_mod
+
     def add_all(self, df):
         """
         Add all volatility features.
         """
         df_mod = self.calculate_vwap_deviation(df)
         df_mod = self.calculate_vol_regime(df_mod)
+        df_mod = self.calculate_advanced_vol(df_mod, window=self.advanced_vol_window)
         return df_mod

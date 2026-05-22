@@ -602,3 +602,54 @@ def test_data_loader_persists_latest_fetch(monkeypatch, tmp_path):
     persisted_history = pd.read_csv(history_path)
     assert len(persisted_history) == 2
     assert "2024-01-02" in persisted_history["date"].values
+
+
+def test_model_backtester_volatility_filter(tmp_path):
+    """Task 25: Verify volatility filter skips high-ATR trades."""
+    from qusa.model.backtest import ModelBacktester
+    import joblib
+    from sklearn.tree import DecisionTreeClassifier
+
+    # 1. Create a mock model bundle
+    model = DecisionTreeClassifier()
+    X_dummy = np.random.rand(10, 2)
+    y_dummy = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
+    model.fit(X_dummy, y_dummy)
+    
+    bundle = {
+        "model": model,
+        "features": ["rsi", "atr_pct"],
+        "threshold": 0.5,
+        "trained_date": "2024-01-01"
+    }
+    model_path = tmp_path / "test_model.pkl"
+    joblib.dump(bundle, str(model_path))
+
+    # 2. Create mock data (10 days)
+    data = pd.DataFrame({
+        "date": pd.date_range("2024-01-01", periods=10),
+        "close": [100.0] * 10,
+        "overnight_delta": [1.0] * 10, # All days are UP
+        "rsi": [60.0] * 10,
+        "atr_pct": [1.0, 5.0, 1.0, 5.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] # 2 high vol days
+    })
+    data_path = tmp_path / "test_data.csv"
+    data.to_csv(data_path, index=False)
+
+    # 3. Run backtest with filter at 2.0%
+    backtester = ModelBacktester(str(model_path), str(data_path))
+    vol_filter = {"enabled": True, "max_atr_pct": 2.0}
+    
+    results = backtester.run_backtest(
+        initial_capital=1000, 
+        position_size=1.0, 
+        transaction_cost=0.0,
+        volatility_filter=vol_filter
+    )
+
+    # Days where ATR_PCT > 2.0 should have signal = 0 and vol_skipped = True
+    assert results.loc[results["atr_pct"] > 2.0, "signal"].iloc[0] == 0
+    assert results.loc[results["atr_pct"] > 2.0, "vol_skipped"].iloc[0] == True
+    
+    metrics = backtester.calculate_metrics(1000)
+    assert metrics["skipped_vol_trades"] == 2

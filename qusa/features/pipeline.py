@@ -117,7 +117,7 @@ class FeaturePipeline:
         )
 
         # Volatility features (Task 5.1)
-        features.extend(["vwap_deviation", "vol_regime"])
+        features.extend(["vwap_deviation", "vol_regime", "vol_parkinson", "vol_garman_klass"])
 
         # Calendar features
         features.extend(
