@@ -16,6 +16,7 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
+from qusa.notifications import parse_recipients, send_prediction_email
 from qusa.utils.config import load_config
 
 # --- Page Config ---
@@ -95,6 +96,51 @@ def run_script(script_path, args):
     result = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)})
     return result
 
+def load_prediction_log(log_path):
+    """Load the prediction log if it exists."""
+    if not log_path.exists():
+        return pd.DataFrame()
+    return pd.read_csv(log_path).sort_values("timestamp", ascending=False)
+
+def get_latest_prediction(df_log, ticker):
+    """Return the latest prediction row for a ticker as a dict."""
+    if df_log.empty or "ticker" not in df_log.columns:
+        return None
+
+    df_ticker = df_log[df_log["ticker"] == ticker]
+    if df_ticker.empty:
+        return None
+
+    return df_ticker.iloc[0].to_dict()
+
+def count_ticker_predictions(df_log, ticker):
+    """Count prediction log rows for a ticker."""
+    if df_log.empty or "ticker" not in df_log.columns:
+        return 0
+    return int((df_log["ticker"] == ticker).sum())
+
+def email_config_status(email_config):
+    """Summarize whether dashboard email settings are ready."""
+    if not email_config.get("enabled", False):
+        return False, "Email notifications are disabled in config."
+
+    smtp_user_env = email_config.get("smtp_user_env", "QUSA_SMTP_USER")
+    smtp_password_env = email_config.get("smtp_password_env", "QUSA_SMTP_PASSWORD")
+    missing = []
+    if not email_config.get("smtp_host"):
+        missing.append("smtp_host")
+    if not email_config.get("smtp_port"):
+        missing.append("smtp_port")
+    if not email_config.get("smtp_user") and not os.getenv(smtp_user_env):
+        missing.append("SMTP username")
+    if not email_config.get("smtp_password") and not os.getenv(smtp_password_env):
+        missing.append("SMTP password")
+
+    if missing:
+        return False, f"Missing email setup: {', '.join(missing)}"
+
+    return True, "Email notifications are configured."
+
 # --- Sidebar ---
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/combo-chart.png", width=48)
@@ -125,9 +171,9 @@ with tab_predict:
     st.markdown('<p class="section-header">Latest Strategic Intelligence</p>', unsafe_allow_html=True)
     
     log_path = Path(config["prediction"].get("csv_log", config["prediction"].get("log_file"))).expanduser()
+    df_log = load_prediction_log(log_path)
     
-    if log_path.exists():
-        df_log = pd.read_csv(log_path).sort_values("timestamp", ascending=False)
+    if not df_log.empty:
         df_ticker = df_log[df_log['ticker'] == selected_ticker]
         
         if not df_ticker.empty:
@@ -148,12 +194,96 @@ with tab_predict:
             st.info("No intelligence available for selected ticker.")
     
     st.markdown('<p class="section-header">Operational Execution Log</p>', unsafe_allow_html=True)
-    if log_path.exists():
+    if not df_log.empty:
         st.dataframe(df_log.head(15), use_container_width=True, hide_index=True)
-        
+    
+    st.markdown('<p class="section-header">Email Notification</p>', unsafe_allow_html=True)
+    email_config = config.get("email", {}).copy()
+    smtp_col1, smtp_col2 = st.columns(2)
+    with smtp_col1:
+        smtp_user_input = st.text_input(
+            "SMTP username",
+            key="prediction_smtp_user",
+            placeholder="sender@gmail.com",
+        )
+    with smtp_col2:
+        smtp_password_input = st.text_input(
+            "SMTP password",
+            key="prediction_smtp_password",
+            type="password",
+            placeholder="App password",
+        )
+
+    if smtp_user_input:
+        email_config["smtp_user"] = smtp_user_input
+    if smtp_password_input:
+        email_config["smtp_password"] = smtp_password_input
+
+    email_ready, email_status = email_config_status(email_config)
+    recipient_input = st.text_input(
+        "Prediction recipients",
+        key="prediction_email_recipients",
+        placeholder="trader@example.com, analyst@example.com",
+    )
+
+    recipients = []
+    recipients_valid = True
+    try:
+        recipients = parse_recipients(recipient_input)
+    except ValueError as exc:
+        recipients_valid = False
+        st.warning(str(exc))
+
+    if email_ready:
+        st.success(email_status)
+    else:
+        st.warning(email_status)
+
+    if recipients:
+        st.info(f"Notification will be sent to {len(recipients)} recipient(s) after a successful inference.")
+    elif recipients_valid:
+        st.warning("Enter at least one recipient to send a notification after inference.")
+
+    email_result = st.session_state.pop("prediction_email_result", None)
+    if email_result:
+        if email_result.get("sent"):
+            st.success(f"Prediction email sent to {', '.join(email_result.get('recipients', []))}.")
+        else:
+            st.warning(f"Prediction email was not sent: {email_result.get('error')}")
+
     if st.button("Generate New Inference", type="primary"):
+        before_count = count_ticker_predictions(df_log, selected_ticker)
         with st.spinner("Running model..."):
-            run_script("scripts/model_prediction.py", ["-ticker", selected_ticker, "--fetch"])
+            result = run_script("scripts/model_prediction.py", ["-ticker", selected_ticker, "--fetch"])
+            if result.returncode != 0:
+                st.error("Prediction failed. Check the predictor logs for details.")
+                if result.stderr:
+                    st.code(result.stderr)
+                st.stop()
+
+            updated_log = load_prediction_log(log_path)
+            after_count = count_ticker_predictions(updated_log, selected_ticker)
+            latest_prediction = get_latest_prediction(updated_log, selected_ticker)
+
+            if after_count <= before_count or not latest_prediction:
+                st.session_state["prediction_email_result"] = {
+                    "sent": False,
+                    "recipients": recipients,
+                    "error": "Prediction completed, but no new prediction log row was found.",
+                }
+            elif recipients and recipients_valid:
+                st.session_state["prediction_email_result"] = send_prediction_email(
+                    email_config=email_config,
+                    recipients=recipients,
+                    prediction=latest_prediction,
+                    ticker=selected_ticker,
+                )
+            else:
+                st.session_state["prediction_email_result"] = {
+                    "sent": False,
+                    "recipients": recipients,
+                    "error": "No valid email recipients were provided.",
+                }
             st.rerun()
 
 # --- Tab 2: Performance ---

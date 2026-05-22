@@ -63,7 +63,11 @@ pip install -r requirements.txt
 Create a `.env` file in the project root:
 ```bash
 POLYGON_API_KEY=your_api_key_here
+QUSA_SMTP_USER=your_smtp_username
+QUSA_SMTP_PASSWORD=your_smtp_password
 ```
+
+`QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are optional defaults for dashboard email notifications. You can also enter the SMTP username and password directly in the dashboard for the current Streamlit session. For Gmail, use an app password rather than your normal account password.
 
 4. **Configure the project**:
 Edit `qusa/utils/config.yaml` to customize hyperparameters and paths.
@@ -105,6 +109,10 @@ python scripts/model_prediction.py -ticker UPRO --fetch
 **Output**:
 - Prediction direction (UP/DOWN) and confidence level.
 - Historical log entry in `data/predictions/prediction_log.csv`.
+
+### Dashboard Email Notifications
+
+The Streamlit dashboard can notify recipients after a successful "Generate New Inference" run. Configure SMTP host defaults in `qusa/utils/config.yaml`, then enter the SMTP username, SMTP password, and one or more comma- or semicolon-separated recipients in the dashboard before running inference. If `QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are set in your environment, the dashboard can use them as defaults instead of requiring credentials in the UI.
 
 ---
 
