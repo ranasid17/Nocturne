@@ -162,7 +162,7 @@ with st.sidebar:
             run_script("scripts/run_FE_pipeline.py", ["-ticker", selected_ticker, "--fetch"])
 
 # --- Main Content ---
-st.title("Nocturne Command Center")
+st.title("Nocturne Dashboard")
 
 tab_predict, tab_perf, tab_regime = st.tabs(["Signals", "Performance", "Regimes"])
 
