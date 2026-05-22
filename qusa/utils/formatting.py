@@ -62,10 +62,17 @@ def format_prediction_card(prediction, ticker=None, width=50):
     conf = prediction.get("confidence", "N/A")
     lines.append(f"Confidence: {conf}")
     
+    vol_triggered = prediction.get("volatility_filter_triggered", False)
+    if vol_triggered:
+        atr_val = prediction.get("atr_pct", 0.0)
+        lines.append(f"ATR %:       {atr_val:.2f}% (EXCEEDS LIMIT)")
+    
     lines.append("") # Spacer
     
     # Signal interpretation
-    if conf == "HIGH":
+    if vol_triggered:
+        lines.append("⚠️ VOLATILITY FILTER - NO TRADE")
+    elif conf == "HIGH":
         if prediction.get("prediction") == 1:
             lines.append("🚀 STRONG BUY SIGNAL")
         else:
