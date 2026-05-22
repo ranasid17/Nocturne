@@ -67,7 +67,7 @@ QUSA_SMTP_USER=your_smtp_username
 QUSA_SMTP_PASSWORD=your_smtp_password
 ```
 
-`QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are only required for dashboard email notifications. For Gmail, use an app password rather than your normal account password.
+`QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are optional defaults for dashboard email notifications. You can also enter the SMTP username and password directly in the dashboard for the current Streamlit session. For Gmail, use an app password rather than your normal account password.
 
 4. **Configure the project**:
 Edit `qusa/utils/config.yaml` to customize hyperparameters and paths.
@@ -112,7 +112,7 @@ python scripts/model_prediction.py -ticker UPRO --fetch
 
 ### Dashboard Email Notifications
 
-The Streamlit dashboard can notify recipients after a successful "Generate New Inference" run. Configure SMTP defaults in `qusa/utils/config.yaml`, set `QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` in your environment, then enter one or more comma- or semicolon-separated recipients in the dashboard before running inference.
+The Streamlit dashboard can notify recipients after a successful "Generate New Inference" run. Configure SMTP host defaults in `qusa/utils/config.yaml`, then enter the SMTP username, SMTP password, and one or more comma- or semicolon-separated recipients in the dashboard before running inference. If `QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are set in your environment, the dashboard can use them as defaults instead of requiring credentials in the UI.
 
 ---
 

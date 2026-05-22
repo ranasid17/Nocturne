@@ -90,8 +90,8 @@ def _resolve_smtp_settings(email_config):
     smtp_port = email_config.get("smtp_port")
     smtp_user_env = email_config.get("smtp_user_env", "QUSA_SMTP_USER")
     smtp_password_env = email_config.get("smtp_password_env", "QUSA_SMTP_PASSWORD")
-    smtp_user = os.getenv(smtp_user_env)
-    smtp_password = os.getenv(smtp_password_env)
+    smtp_user = email_config.get("smtp_user") or os.getenv(smtp_user_env)
+    smtp_password = email_config.get("smtp_password") or os.getenv(smtp_password_env)
 
     missing = []
     if not smtp_host:

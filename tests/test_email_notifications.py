@@ -100,6 +100,32 @@ def test_send_prediction_email_uses_env_credentials_and_default_sender(monkeypat
     assert sent_msg["To"] == "desk@example.com, pm@example.com"
 
 
+def test_send_prediction_email_accepts_runtime_credentials(monkeypatch):
+    monkeypatch.delenv("QUSA_SMTP_USER", raising=False)
+    monkeypatch.delenv("QUSA_SMTP_PASSWORD", raising=False)
+    config = _email_config()
+    config["smtp_user"] = "runtime-user@example.com"
+    config["smtp_password"] = "runtime-secret"
+    smtp_server = MagicMock()
+    smtp_context = MagicMock()
+    smtp_context.__enter__.return_value = smtp_server
+    smtp_context.__exit__.return_value = None
+
+    with patch("qusa.notifications.email.smtplib.SMTP", return_value=smtp_context):
+        result = send_prediction_email(
+            email_config=config,
+            recipients=["desk@example.com"],
+            prediction=_prediction(),
+            ticker="UPRO",
+        )
+
+    assert result["sent"] is True
+    smtp_server.login.assert_called_once_with(
+        "runtime-user@example.com",
+        "runtime-secret",
+    )
+
+
 def test_send_prediction_email_returns_error_on_smtp_failure(monkeypatch):
     monkeypatch.setenv("QUSA_SMTP_USER", "smtp-user@example.com")
     monkeypatch.setenv("QUSA_SMTP_PASSWORD", "secret")
