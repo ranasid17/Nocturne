@@ -52,7 +52,7 @@ def test_parse_recipients_rejects_invalid_addresses():
         parse_recipients("valid@example.com, invalid-address")
 
 
-def test_build_prediction_email_contains_signal_summary():
+def test_build_prediction_email_contains_html_alternative():
     msg = build_prediction_email(
         prediction=_prediction(),
         ticker="UPRO",
@@ -60,15 +60,23 @@ def test_build_prediction_email_contains_signal_summary():
         from_email="sender@example.com",
     )
 
-    body = msg.get_content()
+    # EmailMessage with alternatives should have multiple parts
+    parts = list(msg.iter_parts())
+    assert len(parts) == 2  # text/plain and text/html
 
-    assert msg["Subject"] == "QUSA prediction: UPRO UP (HIGH)"
-    assert msg["From"] == "sender@example.com"
-    assert msg["To"] == "desk@example.com"
-    assert "UPRO" in body
-    assert "2026-05-21" in body
-    assert "Probability up: 73.0%" in body
-    assert "Confidence: HIGH" in body
+    # Check text part (first part)
+    text_part = parts[0].get_content()
+    assert "UPRO" in text_part
+    assert "Probability up: 73.0%" in text_part
+
+    # Check HTML part (second part)
+    html_part = parts[1].get_content()
+    assert "<!DOCTYPE html>" in html_part
+    assert "Nocturne Intelligence" in html_part
+    assert "UPRO Analysis" in html_part
+    assert "UP" in html_part
+    assert "HIGH CONVICTION" in html_part
+    assert "73.0%" in html_part
 
 
 def test_send_prediction_email_uses_env_credentials_and_default_sender(monkeypatch):
