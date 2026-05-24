@@ -2,12 +2,123 @@
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Dashboard</h1>
+    <h1 class="h2" id="tickerTitle">UPRO Dashboard</h1>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <p>Welcome to the new Nocturne Flask Dashboard. Implementation in progress...</p>
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="dashboardTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="signals-tab" data-bs-toggle="tab" data-bs-target="#signals" type="button" role="tab">Signals</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="performance-tab" data-bs-toggle="tab" data-bs-target="#performance" type="button" role="tab">Performance</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="regimes-tab" data-bs-toggle="tab" data-bs-target="#regimes" type="button" role="tab">Regimes</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="dashboardTabsContent">
+    <!-- Tab 1: Signals -->
+    <div class="tab-pane fade show active" id="signals" role="tabpanel">
+        <h5 class="section-header">Latest Strategic Intelligence</h5>
+        
+        <div class="row g-4 mb-4" id="metricsRow">
+            <div class="col-md-4">
+                <div class="metric-card p-3 bg-white rounded shadow-sm border">
+                    <div class="text-muted small fw-bold text-uppercase">Market Bias</div>
+                    <div class="h3 mb-0" id="metric-bias">--</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="metric-card p-3 bg-white rounded shadow-sm border">
+                    <div class="text-muted small fw-bold text-uppercase">Upward Prob.</div>
+                    <div class="h3 mb-0" id="metric-prob">--</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="metric-card p-3 bg-white rounded shadow-sm border">
+                    <div class="text-muted small fw-bold text-uppercase">Conviction</div>
+                    <div class="h3 mb-0" id="metric-conviction">--</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="signalStatusBox" class="alert d-none mb-4" role="alert">
+            <!-- Signal status message -->
+        </div>
+
+        <h5 class="section-header mt-5">Operational Execution Log</h5>
+        <div class="table-responsive bg-white rounded shadow-sm border p-3">
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Direction</th>
+                        <th>Prob. Up</th>
+                        <th>Confidence</th>
+                        <th>ATR%</th>
+                        <th>Vol. Filter</th>
+                    </tr>
+                </thead>
+                <tbody id="predictionLogTableBody">
+                    <!-- Log entries -->
+                </tbody>
+            </table>
+        </div>
+
+        <h5 class="section-header mt-5">Generate New Inference</h5>
+        <div class="bg-white rounded shadow-sm border p-4 mb-4">
+            <div class="mb-3">
+                <label for="recipientInput" class="form-label">Recipients (comma-separated)</label>
+                <input type="text" class="form-control" id="recipientInput" placeholder="trader@example.com, analyst@example.com">
+            </div>
+            <button class="btn btn-primary" id="runInferenceBtn">
+                Generate New Inference
+            </button>
+        </div>
+    </div>
+
+    <!-- Tab 2: Performance -->
+    <div class="tab-pane fade" id="performance" role="tabpanel">
+        <h5 class="section-header">Strategy Analytics & Risk Attribution</h5>
+        <div id="equityChart" style="height: 450px;" class="mb-4"></div>
+        
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="metric-card p-3 rounded shadow-sm text-white" id="perf-total-return" style="background-color: #065f46;">
+                    <div class="small fw-bold text-uppercase">Total Return</div>
+                    <div class="h3 mb-0">--</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card p-3 rounded shadow-sm text-white" id="perf-sharpe" style="background-color: #065f46;">
+                    <div class="small fw-bold text-uppercase">Sharpe Ratio</div>
+                    <div class="h3 mb-0">--</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card p-3 rounded shadow-sm text-white" id="perf-max-dd" style="background-color: #065f46;">
+                    <div class="small fw-bold text-uppercase">Max Drawdown</div>
+                    <div class="h3 mb-0">--</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card p-3 rounded shadow-sm text-white" id="perf-alpha" style="background-color: #065f46;">
+                    <div class="small fw-bold text-uppercase">Alpha</div>
+                    <div class="h3 mb-0">--</div>
+                </div>
+            </div>
+        </div>
+
+        <h5 class="section-header mt-5">Risk Analytics</h5>
+        <div id="drawdownChart" style="height: 300px;" class="mb-4"></div>
+    </div>
+
+    <!-- Tab 3: Regimes -->
+    <div class="tab-pane fade" id="regimes" role="tabpanel">
+        <h5 class="section-header">Market Regime Analysis</h5>
+        <p class="text-muted">Market regime data visualization coming soon...</p>
     </div>
 </div>
 {% endblock %}
