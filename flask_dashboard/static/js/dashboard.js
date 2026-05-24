@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
             y: data.strategy_value,
             name: 'Strategy',
             type: 'scatter',
-            line: { color: '#2563eb', width: 2.5 }
+            line: { color: '#3b82f6', width: 2.5 } // Brighter blue for dark mode
         };
         const bhTrace = {
             x: data.dates,
@@ -145,7 +145,9 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         const equityLayout = {
             title: 'Cumulative Equity',
-            template: 'plotly_white',
+            template: 'plotly_dark',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
             margin: { t: 40, b: 40, l: 40, r: 20 },
             hovermode: 'x unified'
         };
@@ -162,7 +164,9 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         const ddLayout = {
             title: 'Strategy Drawdown (%)',
-            template: 'plotly_white',
+            template: 'plotly_dark',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
             margin: { t: 40, b: 40, l: 40, r: 20 },
             yaxis: { title: 'Drawdown %' }
         };

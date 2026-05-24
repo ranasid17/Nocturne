@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,17 +12,28 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
+            background-color: #0f172a; /* Deep blue-gray background */
+            color: #f8fafc;
         }
         .navbar {
-            background-color: #ffffff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background-color: #1e293b !important;
+            border-bottom: 1px solid #334155;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         .sidebar {
-            background-color: #ffffff;
-            border-right: 1px solid #e2e8f0;
+            background-color: #1e293b;
+            border-right: 1px solid #334155;
             height: calc(100vh - 56px);
             padding: 20px;
+        }
+        .section-header {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 1rem;
+            margin-top: 1.5rem;
+            border-left: 4px solid #3b82f6;
+            padding-left: 1rem;
         }
     </style>
 </head>
