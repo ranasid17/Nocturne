@@ -203,32 +203,6 @@ with tab_predict:
     st.markdown('<p class="section-header">Email Notification</p>', unsafe_allow_html=True)
     email_config = config.get("email", {}).copy()
     
-    # Resolve environment variable names
-    smtp_user_env = email_config.get("smtp_user_env", "QUSA_SMTP_USER")
-    smtp_password_env = email_config.get("smtp_password_env", "QUSA_SMTP_PASSWORD")
-    
-    smtp_col1, smtp_col2 = st.columns(2)
-    with smtp_col1:
-        smtp_user_input = st.text_input(
-            "SMTP username",
-            key="prediction_smtp_user",
-            value=os.getenv(smtp_user_env, ""),
-            placeholder="sender@gmail.com",
-        )
-    with smtp_col2:
-        smtp_password_input = st.text_input(
-            "SMTP password",
-            key="prediction_smtp_password",
-            type="password",
-            value=os.getenv(smtp_password_env, ""),
-            placeholder="App password",
-        )
-
-    if smtp_user_input:
-        email_config["smtp_user"] = smtp_user_input
-    if smtp_password_input:
-        email_config["smtp_password"] = smtp_password_input
-
     email_ready, email_status = email_config_status(email_config)
     recipient_input = st.text_input(
         "Prediction recipients",
