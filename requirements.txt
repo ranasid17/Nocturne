@@ -21,6 +21,7 @@ streamlit
 plotly
 bottleneck>=1.3.6
 watchdog
+flask
 
 # testing
 pytest
