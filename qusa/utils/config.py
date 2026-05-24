@@ -6,6 +6,30 @@ import yaml
 from pathlib import Path
 
 
+def load_env(env_path=".env"):
+    """
+    Load environment variables from a .env file.
+    Only basic KEY=VALUE pairs are supported.
+    """
+    env_path = Path(env_path).expanduser()
+    if not env_path.exists():
+        return
+
+    with open(env_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                # Strip leading/trailing quotes if they exist
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                    value = value[1:-1]
+                os.environ.setdefault(key, value)
+
+
 def load_config(config_path="config.yaml"):
     """
     Load configuration from a YAML file.
