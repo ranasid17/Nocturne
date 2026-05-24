@@ -146,14 +146,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const tableBody = document.getElementById('predictionLogTableBody');
         tableBody.innerHTML = '';
         history.forEach(row => {
+            const atr = row.atr_pct !== null && row.atr_pct !== undefined ? parseFloat(row.atr_pct).toFixed(3) : '0.000';
+            const volFilter = row.volatility_filter_triggered !== null && row.volatility_filter_triggered !== undefined ? (row.volatility_filter_triggered ? 'TRIGGERED' : 'CLEAR') : 'CLEAR';
+            
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${row.date}</td>
-                <td><span class="badge ${row.direction === 'UP' ? 'bg-success' : 'bg-danger'}">${row.direction}</span></td>
+                <td><span class="badge ${row.direction.includes('UP') ? 'bg-success' : 'bg-danger'}">${row.direction}</span></td>
                 <td>${(row.probability_up * 100).toFixed(1)}%</td>
                 <td><span class="badge ${row.confidence === 'HIGH' ? 'bg-primary' : 'bg-secondary'}">${row.confidence}</span></td>
-                <td>${parseFloat(row.atr_pct).toFixed(3)}</td>
-                <td>${row.volatility_filter_triggered ? 'TRIGGERED' : 'CLEAR'}</td>
+                <td>${atr}</td>
+                <td>${volFilter}</td>
             `;
             tableBody.appendChild(tr);
         });

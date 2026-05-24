@@ -173,6 +173,8 @@ def main():
                 "direction": prediction.get("direction"),
                 "probability_up": prediction.get("probability_up"),
                 "confidence": prediction.get("confidence"),
+                "atr_pct": prediction.get("atr_pct"),
+                "volatility_filter_triggered": prediction.get("volatility_filter_triggered"),
             }
 
             logger.info(
