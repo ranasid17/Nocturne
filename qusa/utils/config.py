@@ -22,7 +22,12 @@ def load_env(env_path=".env"):
                 continue
             if "=" in line:
                 key, value = line.split("=", 1)
-                os.environ.setdefault(key.strip(), value.strip())
+                key = key.strip()
+                value = value.strip()
+                # Strip leading/trailing quotes if they exist
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                    value = value[1:-1]
+                os.environ.setdefault(key, value)
 
 
 def load_config(config_path="config.yaml"):
