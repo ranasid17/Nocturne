@@ -118,7 +118,18 @@
     <!-- Tab 3: Regimes -->
     <div class="tab-pane fade" id="regimes" role="tabpanel">
         <h5 class="section-header">Market Regime Analysis</h5>
-        <p class="text-muted">Market regime data visualization coming soon...</p>
+        <div class="table-responsive rounded shadow-sm border p-3" style="background-color: #1e293b;">
+            <table class="table table-hover table-sm">
+                <thead id="regimeTableHead">
+                    <!-- Dynamic Headers -->
+                </thead>
+                <tbody id="regimeTableBody">
+                    <!-- Dynamic Content -->
+                </tbody>
+            </table>
+        </div>
+        <div id="regimeError" class="alert alert-info d-none mt-3">
+            No regime analysis data found. Run the clustering script to generate results.
+        </div>
     </div>
-</div>
 {% endblock %}

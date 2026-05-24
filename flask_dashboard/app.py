@@ -207,5 +207,19 @@ def task_status(task_id):
 
     return jsonify({"status": "success", "email": email_result})
 
+@app.route("/api/regimes")
+def api_regimes():
+    config = get_config()
+    proc_dir = Path(config["data"]["paths"]["processed_data_dir"]).expanduser()
+    cluster_stats_path = proc_dir / "cluster_statistics.json"
+    
+    if not cluster_stats_path.exists():
+        return jsonify({"error": "Regime statistics not found"}), 404
+
+    with open(cluster_stats_path, 'r') as f:
+        stats = json.load(f)
+        
+    return jsonify(stats)
+
 if __name__ == "__main__":
     app.run(debug=True, port=5001)

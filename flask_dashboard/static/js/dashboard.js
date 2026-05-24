@@ -45,6 +45,74 @@ document.addEventListener('DOMContentLoaded', function() {
 
         loadPredictionData(ticker);
         loadPerformanceData(ticker);
+        loadRegimeData();
+    }
+
+    function loadRegimeData() {
+        fetch('/api/regimes')
+            .then(response => {
+                if (!response.ok) throw new Error('Regime data not found');
+                return response.json();
+            })
+            .then(data => {
+                renderRegimeTable(data);
+            })
+            .catch(error => {
+                console.error(error);
+                document.getElementById('regimeError').classList.remove('d-none');
+                document.getElementById('regimeTableHead').parentElement.classList.add('d-none');
+            });
+    }
+
+    function renderRegimeTable(data) {
+        const head = document.getElementById('regimeTableHead');
+        const body = document.getElementById('regimeTableBody');
+        const error = document.getElementById('regimeError');
+        const container = head.parentElement;
+
+        error.classList.add('d-none');
+        container.classList.remove('d-none');
+        
+        head.innerHTML = '';
+        body.innerHTML = '';
+
+        if (!data || data.length === 0) return;
+
+        // Create headers from keys of the first object
+        const keys = Object.keys(data[0]);
+        const trHead = document.createElement('tr');
+        keys.forEach(key => {
+            const th = document.createElement('th');
+            th.textContent = key.replace(/_/g, ' ').toUpperCase();
+            trHead.appendChild(th);
+        });
+        head.appendChild(trHead);
+
+        // Create rows
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            keys.forEach(key => {
+                const td = document.createElement('td');
+                let val = row[key];
+                
+                // Formatting
+                if (typeof val === 'number') {
+                    if (key.includes('delta') || key.includes('return')) {
+                        val = (val * 100).toFixed(2) + '%';
+                        // Color based on value
+                        td.style.color = parseFloat(val) >= 0 ? '#10b981' : '#ef4444';
+                    } else if (key === 'cluster') {
+                        val = val; // Cluster ID
+                    } else {
+                        val = val.toFixed(2);
+                    }
+                }
+                
+                td.textContent = val;
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
     }
 
     function loadPredictionData(ticker) {
