@@ -22,6 +22,9 @@ app = Flask(__name__)
 # Load environment variables from .env if it exists
 load_env(PROJECT_ROOT / ".env")
 
+# Global task storage (simple dictionary for MVP)
+tasks = {}
+
 def get_config():
     config_path = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
     return load_config(str(config_path))
@@ -131,28 +134,20 @@ def run_inference():
     if not ticker:
         return jsonify({"error": "Ticker is required"}), 400
 
-    # For now, run synchronously but in a real app this should be async
-    result = run_script("scripts/model_prediction.py", ["-ticker", ticker, "--fetch"])
+    task_id = f"inference_{ticker}_{datetime.now().strftime('%H%M%S')}"
     
-    if result.returncode != 0:
-        return jsonify({"error": "Prediction failed", "details": result.stderr}), 500
-
-    # Logic to send email if recipients provided
-    if recipients:
-        config = get_config()
-        updated_log = load_prediction_log(Path(config["prediction"].get("csv_log")).expanduser())
-        latest_prediction = get_latest_prediction(updated_log, ticker.upper())
-        
-        if latest_prediction:
-            email_result = send_prediction_email(
-                email_config=config.get("email"),
-                recipients=recipients,
-                prediction=latest_prediction,
-                ticker=ticker.upper(),
-            )
-            return jsonify({"status": "success", "email": email_result})
-
-    return jsonify({"status": "success"})
+    # Run asynchronously
+    cmd = [sys.executable, str(PROJECT_ROOT / "scripts/model_prediction.py"), "-ticker", ticker, "--fetch"]
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)})
+    
+    tasks[task_id] = {
+        "process": process,
+        "ticker": ticker.upper(),
+        "recipients": recipients,
+        "type": "inference"
+    }
+    
+    return jsonify({"task_id": task_id})
 
 @app.route("/api/refresh-pipeline", methods=["POST"])
 def refresh_pipeline():
@@ -162,12 +157,55 @@ def refresh_pipeline():
     if not ticker:
         return jsonify({"error": "Ticker is required"}), 400
 
-    result = run_script("scripts/run_FE_pipeline.py", ["-ticker", ticker, "--fetch"])
+    task_id = f"pipeline_{ticker}_{datetime.now().strftime('%H%M%S')}"
     
-    if result.returncode != 0:
-        return jsonify({"error": "Pipeline refresh failed", "details": result.stderr}), 500
+    # Run asynchronously
+    cmd = [sys.executable, str(PROJECT_ROOT / "scripts/run_FE_pipeline.py"), "-ticker", ticker, "--fetch"]
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)})
+    
+    tasks[task_id] = {
+        "process": process,
+        "ticker": ticker.upper(),
+        "type": "pipeline"
+    }
+    
+    return jsonify({"task_id": task_id})
 
-    return jsonify({"status": "success"})
+@app.route("/api/task-status/<task_id>")
+def task_status(task_id):
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+    
+    process = task["process"]
+    return_code = process.poll()
+    
+    if return_code is None:
+        return jsonify({"status": "running"})
+    
+    # Task finished
+    stdout, stderr = process.communicate()
+    
+    if return_code != 0:
+        return jsonify({"status": "failed", "error": stderr})
+
+    # If it was an inference and had recipients, send email
+    email_result = None
+    if task["type"] == "inference" and task.get("recipients"):
+        config = get_config()
+        log_path = Path(config["prediction"].get("csv_log", config["prediction"].get("log_file"))).expanduser()
+        updated_log = load_prediction_log(log_path)
+        latest_prediction = get_latest_prediction(updated_log, task["ticker"])
+        
+        if latest_prediction:
+            email_result = send_prediction_email(
+                email_config=config.get("email"),
+                recipients=task["recipients"],
+                prediction=latest_prediction,
+                ticker=task["ticker"],
+            )
+
+    return jsonify({"status": "success", "email": email_result})
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)

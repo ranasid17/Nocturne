@@ -181,15 +181,11 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(result => {
-            if (result.status === 'success') {
+            pollTaskStatus(result.task_id, () => {
+                refreshPipelineBtn.disabled = false;
+                refreshPipelineBtn.textContent = 'Refresh Pipeline';
                 loadDashboardData();
-            } else {
-                alert(`Error: ${result.error}`);
-            }
-        })
-        .finally(() => {
-            refreshPipelineBtn.disabled = false;
-            refreshPipelineBtn.textContent = 'Refresh Pipeline';
+            });
         });
     }
 
@@ -207,18 +203,31 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(result => {
-            if (result.status === 'success') {
+            pollTaskStatus(result.task_id, (finalData) => {
+                runInferenceBtn.disabled = false;
+                runInferenceBtn.textContent = 'Generate New Inference';
                 loadDashboardData();
-                if (result.email) {
-                    alert(result.email.sent ? 'Prediction email sent!' : `Email error: ${result.email.error}`);
+                if (finalData.email) {
+                    alert(finalData.email.sent ? 'Prediction email sent!' : `Email error: ${finalData.email.error}`);
                 }
-            } else {
-                alert(`Error: ${result.error}`);
-            }
-        })
-        .finally(() => {
-            runInferenceBtn.disabled = false;
-            runInferenceBtn.textContent = 'Generate New Inference';
+            });
         });
+    }
+
+    function pollTaskStatus(taskId, callback) {
+        const interval = setInterval(() => {
+            fetch(`/api/task-status/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        clearInterval(interval);
+                        callback(data);
+                    } else if (data.status === 'failed') {
+                        clearInterval(interval);
+                        alert(`Task failed: ${data.error}`);
+                        callback(data);
+                    }
+                });
+        }, 2000);
     }
 });
