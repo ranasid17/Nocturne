@@ -1,6 +1,6 @@
 # Nocturne/requirements.txt
 
-# data retreival
+# Data retrieval
 requests
 
 # feature engineering 
@@ -22,6 +22,7 @@ plotly
 bottleneck>=1.3.6
 watchdog
 flask>=2.3
+python-dotenv>=1.0  # Load .env when starting the Flask CLI
 
 # testing
 pytest

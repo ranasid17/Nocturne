@@ -220,7 +220,7 @@ Goal: Make the Flask app easy to install, run, test, and commit cleanly on GitHu
 - **Objective:** Ensure Flask runtime dependencies are captured.
 - **Context Required:** Current `requirements.txt`.
 - **Implementation Directives:**
-  - Add `flask` if missing.
+  - Keep `flask>=2.3` and add `python-dotenv` for Flask CLI environment loading; verify installation in a clean virtual environment.
   - Keep existing quant/model dependencies intact.
   - Do not pin every package unless already pinned.
 - **Acceptance Criteria:** `python -m pip install -r requirements.txt` installs Flask successfully.
@@ -233,7 +233,7 @@ Goal: Make the Flask app easy to install, run, test, and commit cleanly on GitHu
 - **Implementation Directives:**
   - Create `.env.example`.
   - Include `POLYGON_API_KEY=`, `QUSA_SMTP_USER=`, and `QUSA_SMTP_PASSWORD=`.
-  - Do not copy real values from local `.env`.
+  - Do not copy real values from local `.env`; ensure CLI configuration loading reads the project `.env` without overriding exported variables.
 - **Acceptance Criteria:** `.env.example` exists and contains only placeholder values.
 
 ### Ticket 3
@@ -253,8 +253,8 @@ Goal: Make the Flask app easy to install, run, test, and commit cleanly on GitHu
 - **Objective:** Confirm app factory and key endpoints work in CI/local tests.
 - **Context Required:** `web_app/__init__.py`, `web_app/api.py`, existing `tests/` patterns.
 - **Implementation Directives:**
-  - Create `tests/test_web_app.py`.
-  - Test `/health`, `/api/health`, and `/api/tickers`.
+  - Reuse `tests/test_web_api.py` and `tests/test_web_pages.py` from Sprints 2 and 3 rather than duplicating coverage.
+  - Verify `/health`, `/api/health`, `/api/tickers`, and page startup; add tests for local environment loading.
   - Use Flask test client; do not require network or Polygon API calls.
 - **Acceptance Criteria:** `pytest -q` passes.
 
@@ -264,7 +264,7 @@ Goal: Make the Flask app easy to install, run, test, and commit cleanly on GitHu
 - **Objective:** Add execution-ready instructions for CLI and Flask usage.
 - **Context Required:** Current `README.md`, `requirements.txt`, `.env.example`.
 - **Implementation Directives:**
-  - Add setup steps: virtualenv, install requirements, copy `.env.example` to `.env`.
+  - Add setup steps: virtualenv, install requirements, copy `.env.example` to `.env`, replace machine-specific config paths, and prepare missing data/models.
   - Add Flask command: `flask --app app run`.
   - Add common CLI commands that still work.
 - **Acceptance Criteria:** A fresh developer can follow README steps to start the local app.

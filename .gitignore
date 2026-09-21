@@ -136,6 +136,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -216,7 +218,7 @@ data/processed/*
 data/raw/*
 data/reports/*
 
-logs/experiments.csv
+logs/
 
 saved_models/*
 *.DS_Store
