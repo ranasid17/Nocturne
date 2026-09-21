@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Research workspace</p><h1>Predictions</h1></div><span class="tag">Overnight direction</span></div>
+<section class="controls" aria-label="Prediction inputs">
+  <form id="prediction-form" data-pipeline-url="{{ url_for('api.run_pipeline') }}" data-prediction-url="{{ url_for('api.run_prediction') }}" data-history-url="{{ url_for('api.prediction_history') }}">
+    <fieldset id="run-controls">
+      <div class="input-row">
+        <div class="field ticker-field">
+          <label for="ticker">Ticker</label>
+          <input id="ticker" name="ticker" list="tickers" value="{{ tickers[0] if tickers else '' }}" placeholder="Symbol" required autocomplete="off" spellcheck="false" pattern="[A-Za-z0-9^][A-Za-z0-9.\^\-]*">
+          <datalist id="tickers">{% for ticker in tickers %}<option value="{{ ticker }}"></option>{% endfor %}</datalist>
+        </div>
+        <div class="field"><label for="volatility">Max ATR (%) <span class="muted">optional</span></label><input id="volatility" name="volatility" type="number" min="0" step="any" placeholder="Configured limit"></div>
+        <label class="checkbox"><input id="fetch-latest" type="checkbox">Fetch latest data</label>
+      </div>
+      {% if ticker_error %}<p class="notice error">{{ ticker_error }}</p>{% elif not tickers %}<p class="notice">No local ticker history found.</p>{% endif %}
+      <div class="actions">
+        <button id="pipeline-button" type="button"><img src="{{ url_for('static', filename='icons/layers.svg') }}" alt="">Run Feature Pipeline</button>
+        <button id="prediction-button" class="primary" type="submit"><img src="{{ url_for('static', filename='icons/play.svg') }}" alt="">Run Prediction</button>
+      </div>
+    </fieldset>
+  </form>
+  <p id="run-status" role="status" aria-live="polite"></p>
+  <noscript><p class="error">JavaScript is required to run predictions.</p></noscript>
+</section>
+<section class="result-section" aria-labelledby="result-heading">
+  <div class="section-heading"><h2 id="result-heading">Latest result</h2><span id="result-ticker" class="muted"></span></div>
+  <p id="result-empty" class="empty">No prediction run in this session.</p>
+  <div id="prediction-result" hidden>
+    <dl class="metrics">
+      <div><dt>Direction</dt><dd id="result-direction"></dd></div>
+      <div><dt>Probability up</dt><dd id="result-probability"></dd></div>
+      <div><dt>Confidence</dt><dd id="result-confidence"></dd></div>
+      <div><dt>Data date</dt><dd id="result-date"></dd></div>
+      <div><dt>Volatility filter</dt><dd id="result-filter"></dd></div>
+    </dl>
+  </div>
+</section>
+<section class="history-section" aria-labelledby="history-heading">
+  <div class="section-heading"><h2 id="history-heading">Prediction history</h2><div class="history-tools"><span id="history-count" class="muted"></span><button id="refresh-history" class="icon-button" type="button" title="Refresh history" aria-label="Refresh history"><img src="{{ url_for('static', filename='icons/refresh-cw.svg') }}" alt=""></button></div></div>
+  <p id="history-status" role="status" aria-live="polite">Loading history...</p>
+  <div class="table-scroll" role="region" aria-label="Prediction history" tabindex="0">
+    <table><thead><tr><th scope="col">Timestamp</th><th scope="col">Ticker</th><th scope="col">Data date</th><th scope="col">Direction</th><th scope="col" class="numeric">Probability up</th><th scope="col">Confidence</th></tr></thead><tbody id="history-body"></tbody></table>
+  </div>
+</section>
+{% endblock %}

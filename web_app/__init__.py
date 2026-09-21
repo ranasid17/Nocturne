@@ -12,6 +12,7 @@ except ImportError:
 from flask import Flask, jsonify
 
 from web_app.api import api_bp
+from web_app.routes import pages_bp
 
 
 def create_app():
@@ -30,5 +31,6 @@ def create_app():
         return jsonify({"status": "healthy"})
 
     app.register_blueprint(api_bp)
+    app.register_blueprint(pages_bp)
 
     return app

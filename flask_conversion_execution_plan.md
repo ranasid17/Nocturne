@@ -196,7 +196,7 @@ Goal: Build simple Jinja2 screens and static assets that replace CLI inputs with
 - **Implementation Directives:**
   - Add a "Run Prediction" button.
   - Render direction, confidence, probability up, date, and volatility filter status.
-  - Disable the button while the request is running.
+  - Disable both execution buttons and inputs while either service request is running; expose loading and error status, and accept an optional non-negative volatility limit.
 - **Acceptance Criteria:** Clicking the button displays a structured prediction result without page reload.
 
 ### Ticket 6
@@ -206,9 +206,9 @@ Goal: Build simple Jinja2 screens and static assets that replace CLI inputs with
 - **Context Required:** `/api/predictions/history` and `web_app/templates/dashboard.html`.
 - **Implementation Directives:**
   - Add a table for latest predictions.
-  - Load history on page load and after successful prediction.
+  - Load history on page load, ticker changes, manual refresh, and after successful prediction; prevent stale responses from replacing the selected ticker's history.
   - Show timestamp, ticker, date, direction, probability, and confidence.
-- **Acceptance Criteria:** The table updates after a new prediction is run.
+- **Acceptance Criteria:** The table updates after a new prediction is run; empty and error states, keyboard operation, and desktop/mobile layouts pass browser checks.
 
 ## Sprint 4: Local Deployment & Documentation
 
