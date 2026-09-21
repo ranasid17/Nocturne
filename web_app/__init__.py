@@ -11,6 +11,8 @@ except ImportError:
 
 from flask import Flask, jsonify
 
+from web_app.api import api_bp
+
 
 def create_app():
     """
@@ -26,5 +28,7 @@ def create_app():
     @app.route("/health", methods=["GET"])
     def health():
         return jsonify({"status": "healthy"})
+
+    app.register_blueprint(api_bp)
 
     return app

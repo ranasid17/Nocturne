@@ -104,8 +104,8 @@ Goal: Build Flask routes that call the extracted service layer and expose JSON e
 - **Implementation Directives:**
   - Add `GET /api/tickers`.
   - Read `raw_data_dir` from config.
-  - Return sorted unique tickers from `*_history.csv`.
-- **Acceptance Criteria:** Browser or curl request to `/api/tickers` returns a JSON list.
+  - Return sorted unique tickers from `*_history.csv` in `{"success": true, "tickers": [...]}`.
+- **Acceptance Criteria:** Browser or curl request to `/api/tickers` returns the ticker list in the documented JSON envelope.
 
 ### Ticket 4
 
@@ -114,7 +114,7 @@ Goal: Build Flask routes that call the extracted service layer and expose JSON e
 - **Context Required:** `web_app/api.py` and `qusa/services/pipeline_service.py`.
 - **Implementation Directives:**
   - Add `POST /api/pipeline/run`.
-  - Accept JSON body with `ticker` and optional `fetch_latest`.
+  - Require a JSON object with a nonempty, filename-safe ticker string and optional boolean `fetch_latest`; reject invalid inputs with HTTP 400 before calling the service.
   - Return the service result or a clear JSON error with HTTP 400/500.
 - **Acceptance Criteria:** Posting `{"ticker":"UPRO","fetch_latest":false}` returns a success JSON payload.
 
@@ -125,8 +125,8 @@ Goal: Build Flask routes that call the extracted service layer and expose JSON e
 - **Context Required:** `web_app/api.py` and `qusa/services/prediction_service.py`.
 - **Implementation Directives:**
   - Add `POST /api/predictions/run`.
-  - Accept JSON body with `ticker`, optional `fetch_latest`, and optional `volatility`.
-  - Return prediction JSON with direction, confidence, probability, and date.
+  - Validate `ticker` and `fetch_latest` as above; optional `volatility` must be null or a finite, non-negative JSON number.
+  - Return the service JSON including nested prediction direction, confidence, probability, and ISO date; map invalid inputs, missing artifacts, and execution errors to JSON responses with HTTP 400, 404, and 500 respectively.
 - **Acceptance Criteria:** Posting a valid ticker returns the same core fields currently written to the prediction log.
 
 ### Ticket 6
@@ -135,9 +135,9 @@ Goal: Build Flask routes that call the extracted service layer and expose JSON e
 - **Objective:** Expose logged predictions for display in the web UI.
 - **Context Required:** `qusa/utils/config.yaml`, prediction CSV format from `scripts/model_prediction.py`.
 - **Implementation Directives:**
-  - Add `GET /api/predictions/history`.
+  - Add `GET /api/predictions/history` reading only the configured `prediction.csv_log`; return `{"success": true, "history": []}` for missing or empty logs.
   - Support optional query param `ticker`.
-  - Return latest rows first, capped at 50.
+  - Return latest rows first, capped at 50 after filtering, in a `history` JSON list; serialize missing numeric values as null.
 - **Acceptance Criteria:** `/api/predictions/history?ticker=UPRO` returns JSON rows from the prediction log.
 
 ## Sprint 3: Frontend Web Interface
