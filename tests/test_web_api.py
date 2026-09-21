@@ -81,16 +81,39 @@ def test_prediction_serialization(client, monkeypatch):
     service.assert_called_once_with(ticker="UPRO", fetch_latest=True, volatility_override=2.5, config_path=api.DEFAULT_CONFIG_PATH)
 
 
-@pytest.mark.parametrize("error,status", [(ValueError("No data"), 400),
-                                         (FileNotFoundError("No model"), 404),
-                                         (RuntimeError("Failed"), 500)])
-def test_prediction_errors(client, monkeypatch, error, status):
+@pytest.mark.parametrize("error,status,code", [
+    (ValueError("No data"), 500, "prediction_failed"),
+    (FileNotFoundError("No model"), 404, "artifact_not_found"),
+    (RuntimeError("Failed"), 500, "prediction_failed"),
+])
+def test_prediction_errors(client, monkeypatch, error, status, code):
     import qusa.services as services
 
     monkeypatch.setattr(services, "make_latest_prediction", Mock(side_effect=error))
     response = client.post("/api/predictions/run", json={"ticker": "UPRO"})
     assert response.status_code == status
-    assert response.get_json() == {"success": False, "error": str(error)}
+    assert response.get_json()["success"] is False
+    assert response.get_json()["code"] == code
+
+
+@pytest.mark.parametrize("endpoint, service_name", [
+    ("pipeline", "run_feature_pipeline"),
+    ("predictions", "make_latest_prediction"),
+])
+def test_service_errors_do_not_expose_sensitive_values(
+    client, monkeypatch, caplog, endpoint, service_name
+):
+    import qusa.services as services
+
+    secret = "REVIEW_SENTINEL"
+    error = RuntimeError(f"provider failed: https://example.test?apiKey={secret}")
+    monkeypatch.setattr(services, service_name, Mock(side_effect=error))
+
+    response = client.post(f"/api/{endpoint}/run", json={"ticker": "UPRO"})
+
+    assert response.status_code == 500
+    assert secret not in response.get_data(as_text=True)
+    assert secret not in caplog.text
 
 
 def test_history_filter_order_limit_and_nulls(client, monkeypatch, tmp_path):

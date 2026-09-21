@@ -17,6 +17,12 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 
+from qusa.model.dataset import (
+    FEATURE_DATE_COLUMN,
+    OUTCOME_DATE_COLUMN,
+    TARGET_VERSION,
+    build_supervised_dataset,
+)
 from qusa.model.train import prepare_model_features
 
 logger = logging.getLogger(__name__)
@@ -48,6 +54,18 @@ class ModelEvaluator:
         self.model = bundle["model"]
         self.features = bundle["features"]
         self.threshold = bundle["threshold"]
+        self.model_id = bundle.get("model_id")
+        self.target_version = bundle.get("target_version")
+        self.dataset_metadata = bundle.get("dataset_metadata", {})
+
+        if self.target_version != TARGET_VERSION:
+            raise ValueError(
+                "Model bundle lacks the supported target contract; retrain before evaluation."
+            )
+        if not self.dataset_metadata.get("training_outcome_end"):
+            raise ValueError(
+                "Model bundle lacks a training outcome boundary; retrain before evaluation."
+            )
 
         logger.info(f"✓ Model loaded")
 
@@ -71,25 +89,36 @@ class ModelEvaluator:
         # load test data
         data = pd.read_csv(os.path.expanduser(test_data_path))
 
-        # define target feature if not present
-        if ("target" not in data.columns) and ("overnight_delta" in data.columns):
-            data["target"] = (data["overnight_delta"] > 0).astype(int)
-        elif "target" not in data.columns:
-            raise KeyError("Neither 'target' nor 'overnight_delta' found in test data.")
+        data = build_supervised_dataset(data)
+        training_outcome_end = pd.Timestamp(
+            self.dataset_metadata["training_outcome_end"]
+        )
+        candidate_count = len(data)
+        data = data.loc[data[OUTCOME_DATE_COLUMN] > training_outcome_end].copy()
+        excluded_count = candidate_count - len(data)
+        if data.empty:
+            raise ValueError(
+                "No evaluation rows remain after the model training outcome boundary."
+            )
 
-        # define target feature
-        y_target = (data["target"] > 0).astype(int)
+        y_target = data["target"]
 
         # extract features and fill missing/non-finite values
         X = prepare_model_features(data, self.features)
 
         # predict
         y_pred = self.model.predict(X)
-        y_prob = self.model.predict_proba(X)[:, 1]
+        y_prob = _probability_of_up(self.model, X)
 
         # calculate metrics
         metrics = self._calculate_metrics(y_target, y_pred, y_prob)
         metrics["calibration"] = self._analyze_calibration(y_target, y_prob)
+        metrics["model_id"] = self.model_id
+        metrics["evaluation_feature_start"] = data[FEATURE_DATE_COLUMN].iloc[0].isoformat()
+        metrics["evaluation_feature_end"] = data[FEATURE_DATE_COLUMN].iloc[-1].isoformat()
+        metrics["evaluation_outcome_start"] = data[OUTCOME_DATE_COLUMN].iloc[0].isoformat()
+        metrics["evaluation_outcome_end"] = data[OUTCOME_DATE_COLUMN].iloc[-1].isoformat()
+        metrics["excluded_pre_training_outcomes"] = excluded_count
         self._print_metrics(metrics)
 
         return metrics
@@ -113,7 +142,7 @@ class ModelEvaluator:
         }
 
         # confusion matrix
-        cm = confusion_matrix(y_true, y_pred)
+        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
         metrics["confusion_matrix"] = cm
         metrics["true_negatives"] = int(cm[0, 0])
         metrics["false_positives"] = int(cm[0, 1])
@@ -156,7 +185,11 @@ class ModelEvaluator:
 
         # merge actual, predicted labels by bins
         df = pd.DataFrame(
-            {"y_true": y_true, "y_prob": y_prob, "bin": pd.cut(y_prob, bins=bins)}
+            {
+                "y_true": y_true,
+                "y_prob": y_prob,
+                "bin": pd.cut(y_prob, bins=bins, include_lowest=True),
+            }
         )
 
         calibration = df.groupby(["bin"], observed=False).agg(
@@ -222,3 +255,13 @@ def evaluate_model(model_path, eval_data_path):
     logger.info("=" * 80)
 
     return metrics
+
+
+def _probability_of_up(model, features):
+    """Return class-one probabilities for normal and legacy model bundles."""
+
+    probabilities = model.predict_proba(features)
+    classes = list(getattr(model, "classes_", []))
+    if 1 not in classes:
+        return pd.Series(0.0, index=features.index).to_numpy()
+    return probabilities[:, classes.index(1)]

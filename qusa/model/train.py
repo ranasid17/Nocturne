@@ -8,11 +8,19 @@ import logging
 import joblib
 import os
 import pandas as pd
+import uuid
 
 from datetime import datetime
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split, cross_val_score, TimeSeriesSplit, GridSearchCV
 from sklearn.tree import DecisionTreeClassifier
+
+from qusa.model.dataset import (
+    FEATURE_DATE_COLUMN,
+    OUTCOME_DATE_COLUMN,
+    TARGET_VERSION,
+    build_supervised_dataset,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -128,11 +136,13 @@ class OvernightDirectionModel:
             1) config (dict): Model configuration
         """
 
-        self.config = config
+        self.config = config or {}
         self.model = None
         self.feature_names = SAFE_FEATURES
         self.trained_date = None
         self.metrics = {}
+        self.model_id = uuid.uuid4().hex
+        self.dataset_metadata = {}
 
         # determine whether to include Monte Carlo features from config (safe default False)
         include_mc = False
@@ -159,22 +169,8 @@ class OvernightDirectionModel:
         logger.info("Loading data...")
         data = pd.read_csv(os.path.expanduser(data_path))
 
-        ###
-        # Store positive overnight delta as target feature
-        # Drop rows with missing target feature
-        # Remove confounding features
-        ###
-
         logger.info("Preparing data...")
-        # SHIFT TARGET: We want Day T features to predict Day T+1 overnight movement.
-        # Since 'overnight_delta' in the CSV is (Open_T - Close_T-1), 
-        # we shift it back by 1 so the target for row T is the jump at T+1.
-        data["target"] = (data["overnight_delta"].shift(-1) > 0).astype(int)
-        
-        # Drop the last row as we don't know the next day's open yet
-        data = data.iloc[:-1]
-
-        data = data.dropna(subset=["overnight_delta"])
+        data = build_supervised_dataset(data)
         data = data.drop(columns=CONFOUND_FEATURES, errors="ignore")
 
         logger.info(f"✓ Loaded {len(data)} rows")
@@ -273,11 +269,11 @@ class OvernightDirectionModel:
 
         # predict labels for test set and store probabilities
         y_pred = self.model.predict(X_test)
-        y_prob = self.model.predict_proba(X_test)[:, 1]
+        y_prob = _probability_of_up(self.model, X_test)
 
         # calculate performance metrics and store as attribute
         accuracy = accuracy_score(y_test, y_pred)
-        cm = confusion_matrix(y_test, y_pred)
+        cm = confusion_matrix(y_test, y_pred, labels=[0, 1])
 
         self.metrics = {
             "accuracy": accuracy,
@@ -321,6 +317,9 @@ class OvernightDirectionModel:
             "features": self.feature_names,
             "threshold": self.config["probability_threshold"],
             "target": "overnight_delta_positive",
+            "target_version": TARGET_VERSION,
+            "model_id": self.model_id,
+            "dataset_metadata": self.dataset_metadata,
             "trained_date": self.trained_date,
             "config": self.config,
             "metrics": self.metrics,
@@ -360,12 +359,25 @@ def train_model(data_path, save_path, config=None):
     X, y = model.prepare_features(data)
 
     # split dataset into train/test sets without shuffling
-    test_size = model.config["test_size"]
+    test_size = model.config.get("test_size", 0.25)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, shuffle=False
     )
 
     logger.info(f"\nTrain: {len(X_train)} | Test: {len(X_test)}")
+
+    if y_train.nunique() < 2:
+        raise ValueError("Training data must contain both overnight direction classes.")
+
+    train_end = len(X_train) - 1
+    model.dataset_metadata = {
+        "feature_start": data[FEATURE_DATE_COLUMN].iloc[0].isoformat(),
+        "training_feature_end": data[FEATURE_DATE_COLUMN].iloc[train_end].isoformat(),
+        "training_outcome_end": data[OUTCOME_DATE_COLUMN].iloc[train_end].isoformat(),
+        "holdout_feature_start": data[FEATURE_DATE_COLUMN].iloc[train_end + 1].isoformat(),
+        "holdout_outcome_end": data[OUTCOME_DATE_COLUMN].iloc[-1].isoformat(),
+        "row_count": len(data),
+    }
 
     # train, evaluate, save model
     model.train(X_train, y_train)
@@ -377,3 +389,13 @@ def train_model(data_path, save_path, config=None):
     logger.info("=" * 80)
 
     return model
+
+
+def _probability_of_up(model, features):
+    """Return the probability for class 1 even for degenerate legacy bundles."""
+
+    probabilities = model.predict_proba(features)
+    classes = list(getattr(model, "classes_", []))
+    if 1 not in classes:
+        return pd.Series(0.0, index=features.index).to_numpy()
+    return probabilities[:, classes.index(1)]

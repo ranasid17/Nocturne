@@ -306,6 +306,14 @@ def _run_backtest(ticker, paths, config, logger, volatility_override=None):
         model_path=str(model_path),
         backtest_data_path=str(data_path),
     )
+    training_outcome_end = backtester.dataset_metadata.get("training_outcome_end")
+    if not training_outcome_end:
+        logger.error(
+            "Skipping backtest for %s: model lacks a verifiable training outcome boundary. "
+            "Retrain the model before backtesting.",
+            ticker,
+        )
+        return False
 
     logger.info(f"Running backtest for {ticker}...")
     backtester.run_backtest(
@@ -313,6 +321,7 @@ def _run_backtest(ticker, paths, config, logger, volatility_override=None):
         position_size=backtest_config["position_size"],
         transaction_cost=backtest_config["transaction_cost"],
         volatility_filter=vol_filter,
+        minimum_outcome_date=training_outcome_end,
     )
     metrics = backtester.calculate_metrics(backtest_config["initial_capital"])
     backtest_box = format_box(

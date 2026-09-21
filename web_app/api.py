@@ -3,7 +3,7 @@ from pathlib import Path
 import math
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from qusa.utils.config import load_config
 
@@ -31,26 +31,49 @@ def _json_safe(value):
     return value
 
 
-def _error_response(message, status_code=400):
-    return jsonify({"success": False, "error": message}), status_code
+_SENSITIVE_QUERY_VALUE = re.compile(
+    r"(?i)(api[_-]?key|token|secret|password)=([^&\s]+)"
+)
+
+
+class RequestValidationError(ValueError):
+    """A request error that is safe to return to an API caller."""
+
+
+def _error_response(message, status_code=400, code=None):
+    payload = {"success": False, "error": message}
+    if code:
+        payload["code"] = code
+    return jsonify(payload), status_code
+
+
+def _redact_sensitive_text(value):
+    return _SENSITIVE_QUERY_VALUE.sub(r"\1=[REDACTED]", str(value))
+
+
+def _service_error_response(operation, exc):
+    current_app.logger.error("%s failed: %s", operation, _redact_sensitive_text(exc))
+    return _error_response(
+        f"{operation} could not be completed.", 500, f"{operation}_failed"
+    )
 
 
 def _request_json():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        raise ValueError("Request body must be a JSON object.")
+        raise RequestValidationError("Request body must be a JSON object.")
     if not isinstance(payload.get("fetch_latest", False), bool):
-        raise ValueError("fetch_latest must be a boolean.")
+        raise RequestValidationError("fetch_latest must be a boolean.")
     return payload
 
 
 def _require_ticker(payload):
     ticker = payload.get("ticker")
     if not isinstance(ticker, str) or not ticker.strip():
-        raise ValueError("Ticker is required and must be a string.")
+        raise RequestValidationError("Ticker is required and must be a string.")
     ticker = ticker.strip().upper()
     if not re.fullmatch(r"[A-Z0-9^][A-Z0-9.^-]*", ticker):
-        raise ValueError("Ticker contains invalid characters.")
+        raise RequestValidationError("Ticker contains invalid characters.")
     return ticker
 
 
@@ -89,7 +112,7 @@ def tickers():
     try:
         return jsonify({"success": True, "tickers": _available_tickers()})
     except Exception as exc:
-        return _error_response(str(exc), 500)
+        return _service_error_response("ticker_lookup", exc)
 
 
 @api_bp.route("/pipeline/run", methods=["POST"])
@@ -105,10 +128,10 @@ def run_pipeline():
             config_path=DEFAULT_CONFIG_PATH,
         )
         return jsonify(_json_safe(result))
-    except ValueError as exc:
-        return _error_response(str(exc), 400)
+    except RequestValidationError as exc:
+        return _error_response(str(exc), 400, "invalid_request")
     except Exception as exc:
-        return _error_response(str(exc), 500)
+        return _service_error_response("feature_pipeline", exc)
 
 
 @api_bp.route("/predictions/run", methods=["POST"])
@@ -120,10 +143,10 @@ def run_prediction():
         volatility_override = None
         if volatility is not None:
             if isinstance(volatility, bool) or not isinstance(volatility, (int, float)):
-                raise ValueError("volatility must be a finite non-negative number.")
+                raise RequestValidationError("volatility must be a finite non-negative number.")
             volatility_override = float(volatility)
             if not math.isfinite(volatility_override) or volatility_override < 0:
-                raise ValueError("volatility must be a finite non-negative number.")
+                raise RequestValidationError("volatility must be a finite non-negative number.")
         from qusa.services import make_latest_prediction
 
         result = make_latest_prediction(
@@ -133,12 +156,15 @@ def run_prediction():
             config_path=DEFAULT_CONFIG_PATH,
         )
         return jsonify(_json_safe(result))
-    except ValueError as exc:
-        return _error_response(str(exc), 400)
+    except RequestValidationError as exc:
+        return _error_response(str(exc), 400, "invalid_request")
     except FileNotFoundError as exc:
-        return _error_response(str(exc), 404)
+        current_app.logger.warning("prediction artifact missing: %s", _redact_sensitive_text(exc))
+        return _error_response(
+            "Required prediction artifact was not found.", 404, "artifact_not_found"
+        )
     except Exception as exc:
-        return _error_response(str(exc), 500)
+        return _service_error_response("prediction", exc)
 
 
 @api_bp.route("/predictions/history", methods=["GET"])
@@ -173,4 +199,4 @@ def prediction_history():
         rows = history.head(50).where(pd.notna(history), None).to_dict(orient="records")
         return jsonify({"success": True, "history": _json_safe(rows)})
     except Exception as exc:
-        return _error_response(str(exc), 500)
+        return _service_error_response("prediction_history", exc)
