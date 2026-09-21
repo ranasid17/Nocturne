@@ -46,35 +46,108 @@ The product roadmap for the small-team signal app is available in [docs/index.md
 
 ### Prerequisites
 
-- Python 3.8+
-- Polygon.io API key (for data fetching)
+- Python 3.9+ (CI uses Python 3.11)
+- Polygon.io API key for fetching and feature generation; the dashboard and health checks can start without it
 - Ollama (optional, for AI-powered reports)
 
 ### Installation
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/yourusername/nocturne.git
-cd nocturne
+git clone https://github.com/ranasid17/Nocturne.git
+cd Nocturne
 ```
 
-2. **Install dependencies**:
+2. **Create an isolated environment and install dependencies** (macOS/Linux):
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
+
+On Windows PowerShell, create it with `py -3 -m venv .venv` and activate with `.venv\Scripts\Activate.ps1`, then run the same pip commands. Run all commands below from the repository root with this environment active.
 
 3. **Set up environment variables**:
-Create a `.env` file in the project root:
+For a new checkout, create the local file from the placeholders:
 ```bash
-POLYGON_API_KEY=your_api_key_here
-QUSA_SMTP_USER=your_smtp_username
-QUSA_SMTP_PASSWORD=your_smtp_password
+cp .env.example .env
 ```
+
+On PowerShell use `Copy-Item .env.example .env`. Do not overwrite an existing `.env`. Edit the new file to set `POLYGON_API_KEY`. Flask loads it at startup; CLI workflows load it when reading configuration. Existing exported environment variables take precedence. `.env` is ignored by Git; `.env.example` contains no credentials.
 
 `QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are optional defaults for dashboard email notifications. You can also enter the SMTP username and password directly in the dashboard for the current Streamlit session. For Gmail, use an app password rather than your normal account password.
 
 4. **Configure the project**:
-Edit `qusa/utils/config.yaml` to customize hyperparameters and paths.
+The checked-in `qusa/utils/config.yaml` contains `~/Projects/qusa/...` paths. Before running services in a new clone, replace those paths with your checkout's absolute paths, or use the following relative values while always running from the repository root. Update these keys in the existing file, preserving all other settings:
+
+```yaml
+data:
+  paths:
+    raw_data_dir: data/raw
+    processed_data_dir: data/processed
+    figures_dir: data/figures
+    predictions_dir: data/predictions
+    reports_dir: data/reports
+model:
+  output:
+    model_output_path: saved_models
+prediction:
+  log_file: logs/predictions.log
+  csv_log: data/predictions/prediction_log.csv
+```
+
+Set `reporting.enabled: false` unless you have a local Ollama server and the model specified in `reporting.llm.model`. AI reporting is optional; it is not required to serve the Flask dashboard.
+
+### Start the Flask Dashboard
+
+```bash
+flask --app app run
+```
+
+Open <http://127.0.0.1:5000>. If port 5000 is occupied, use `flask --app app run --port 5050` and open <http://127.0.0.1:5050>. Stop the server with Ctrl+C. The equivalent interpreter-specific command is `python -m flask --app app run`.
+
+The page supports ticker entry, feature generation, predictions with an optional maximum ATR percentage, and the latest 50 logged predictions. Requests run synchronously, so feature generation may take time. This is a local development app without authentication; keep the default loopback binding. GitHub hosts the source and PRs, not the Flask process. The separate GitHub Pages roadmap site cannot run this Python backend.
+
+A fresh clone has no market data or trained models because generated artifacts are ignored. The page still opens with an empty state. To run predictions, follow the CLI workflow below or supply your own compatible data and trained model:
+
+- Ticker discovery reads `data/raw/{TICKER}_history.csv`.
+- Feature generation writes `data/processed/{TICKER}_processed.csv` and currently requires a Polygon API key even when using local history, because the loader initializes the API client.
+- Prediction requires `saved_models/{ticker_lowercase}_model.pkl` and processed data. Training is performed through the CLI, not the Flask page.
+- Prediction logging uses `prediction.csv_log` when `prediction.save` is enabled.
+
+Paths above assume the relative configuration shown earlier. The **Fetch latest data** option needs a valid Polygon API key and network access. Missing models/data produce an error in the page rather than creating a model automatically.
+
+### Verify the Setup
+
+```bash
+python -m pip check
+python -m pytest -q
+python -m compileall -q app.py web_app qusa scripts
+```
+
+With the server running, `curl http://127.0.0.1:5000/health` and `curl http://127.0.0.1:5000/api/health` should return `{"status":"healthy"}`. `/api/tickers` returns a `tickers` list; `/api/predictions/history` returns a `history` list. Both lists may be empty on a new checkout. Tests use temporary data and mocked service calls and do not require live Polygon or Ollama access.
+
+Optional browser checks use Node.js and Playwright, not application runtime dependencies:
+
+```bash
+npm install --prefix /tmp/nocturne-browser-tools playwright
+/tmp/nocturne-browser-tools/node_modules/.bin/playwright install chromium
+NODE_PATH=/tmp/nocturne-browser-tools/node_modules node tests/web_dashboard.cjs http://127.0.0.1:5000
+```
+
+These macOS/Linux browser commands expect at least one configured raw-history ticker. Run actions are mocked to avoid data fetching and prediction-log writes. Screenshots are saved under `/tmp/qusa-sprint3-*.png`. `CHROME_PATH` may point to an installed Chrome executable instead of installing Chromium.
+
+### Troubleshooting
+
+- An import error mentioning Flask, Jinja2, or `escape` usually indicates an old global Flask installation. Activate `.venv`, reinstall `requirements.txt`, and launch with `python -m flask --app app run`.
+- Empty tickers or missing artifacts: verify every configured path and complete fetch, feature generation, and training below. Model filenames use lowercase tickers.
+- `POLYGON_API_KEY ... is required`: fill in `.env` and restart Flask, or export the key before launching the CLI.
+- Ollama connection/model errors during training reports: configure the local model or set `reporting.enabled: false`.
+
+### Review Milestones
+
+The conversion is delivered in four PR-sized commits: service extraction and app skeleton (Sprint 1), API routes (Sprint 2), templates and browser interactions (Sprint 3), and deployment/docs verification (Sprint 4). See [the execution plan](flask_conversion_execution_plan.md). Generated data, models, logs, environment files, and caches remain local.
 
 ## Recommended Workflow
 

@@ -6,6 +6,9 @@ import yaml
 from pathlib import Path
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
 def load_env(env_path=".env"):
     """
     Load environment variables from a .env file.
@@ -38,6 +41,7 @@ def load_config(config_path="config.yaml"):
         1) config_path (str): Path to the YAML configuration file.
     """
 
+    load_env(PROJECT_ROOT / ".env")
     config_path = Path(config_path).expanduser()
 
     with open(config_path, "r") as file:

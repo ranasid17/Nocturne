@@ -23,7 +23,7 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Compile Python files
-        run: python -m compileall -q qusa scripts
+        run: python -m compileall -q app.py web_app qusa scripts
 
       - name: Run smoke tests
         run: python -m pytest -q --cov=qusa --cov-fail-under=40
