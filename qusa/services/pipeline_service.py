@@ -23,7 +23,7 @@ def _build_feature_pipeline(config):
             "overnight": {
                 "abnormal_threshold": config["analysis"]["abnormal_threshold"]
             },
-            "technical_params": config["features"],
+            "feature_params": config["features"],
             "monte_carlo": config.get("monte_carlo", {}),
         }
     )

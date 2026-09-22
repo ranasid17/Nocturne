@@ -1,5 +1,6 @@
 """Shared temporal dataset contract for overnight-direction models."""
 
+import numpy as np
 import pandas as pd
 
 
@@ -11,6 +12,18 @@ OUTCOME_DELTA_COLUMN = "outcome_overnight_delta"
 
 class DatasetContractError(ValueError):
     """Raised when input data cannot support a temporally valid dataset."""
+
+
+def prepare_model_features(data, feature_names, strict=False):
+    """Select the saved feature contract and normalize non-finite values."""
+
+    missing_columns = [column for column in feature_names if column not in data.columns]
+    if missing_columns and strict:
+        raise DatasetContractError(
+            "Input data is missing model features: " + ", ".join(missing_columns)
+        )
+    features = data.reindex(columns=feature_names)
+    return features.replace([np.inf, -np.inf], 0).fillna(0)
 
 
 def build_supervised_dataset(data):

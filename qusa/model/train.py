@@ -20,55 +20,42 @@ from qusa.model.dataset import (
     OUTCOME_DATE_COLUMN,
     TARGET_VERSION,
     build_supervised_dataset,
+    prepare_model_features,
+)
+from qusa.features.monte_carlo import MonteCarloFeatures
+from qusa.features.pipeline import (
+    MODEL_BASE_FEATURES,
+    MODEL_FEATURE_MANIFEST_VERSION,
+    FeaturePipeline,
 )
 
 logger = logging.getLogger(__name__)
 
-# define allowed features for training
-SAFE_FEATURES = [
-    "52_week_high_proximity",
-    "52_week_low_proximity",
-    "atr_pct",
-    "close_position",
-    "rsi",
-    "volume_ratio",
-    "day_of_week",
-    "day_of_month",
-    "month_of_year",
-    "first_5d_month",
-    "final_5d_month",
-    "is_monday",
-    "is_tuesday",
-    "is_wednesday",
-    "is_thursday",
-    "is_friday",
-    "is_jan",
-    "is_feb",
-    "is_mar",
-    "is_apr",
-    "is_may",
-    "is_jun",
-    "is_jul",
-    "is_aug",
-    "is_sep",
-    "is_oct",
-    "is_nov",
-    "is_dec",
-    # Volatility features
-    "vwap_deviation",
-    "vol_regime",
-    # Monte Carlo features
-    "mc_1d_q1",
-    "mc_1d_q5",
-    "mc_1d_q10",
-    "mc_1d_q50",
-    "mc_1d_q95",
-    "mc_1d_return_pct",
-    "mc_1d_prob_breakeven",
-]
+SAFE_FEATURES = MODEL_BASE_FEATURES.copy()
 
-# confirm no duplicate features
-SAFE_FEATURES = list(dict.fromkeys(SAFE_FEATURES))
+
+def validate_training_config(config):
+    """Validate the optional tuning contract before expensive model work begins."""
+
+    validated = dict(config or {})
+    tuning = validated.get("tuning", {})
+    if not isinstance(tuning, dict):
+        raise ValueError("Model tuning configuration must be an object.")
+    enabled = tuning.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ValueError("Model tuning.enabled must be a boolean.")
+    if enabled and "param_grid" in tuning:
+        grid = tuning["param_grid"]
+        allowed = {"max_depth", "min_samples_leaf", "min_samples_split", "class_weight"}
+        if not isinstance(grid, dict) or not grid:
+            raise ValueError("Model tuning.param_grid must be a non-empty object.")
+        invalid_keys = sorted(set(grid).difference(allowed))
+        if invalid_keys:
+            raise ValueError("Unsupported tuning parameters: " + ", ".join(invalid_keys))
+        if any(not isinstance(values, (list, tuple)) or not values for values in grid.values()):
+            raise ValueError("Each tuning parameter must have a non-empty list of values.")
+    validated["tuning"] = tuning
+    return validated
 
 
 def get_safe_features(include_monte_carlo=True, mc_horizons=None):
@@ -84,30 +71,10 @@ def get_safe_features(include_monte_carlo=True, mc_horizons=None):
     Returns:
         list: Deduplicated list of safe feature names.
     """
-    features = SAFE_FEATURES.copy()
-
-    if include_monte_carlo:
-        try:
-            from qusa.features.monte_carlo import MonteCarloFeatures
-
-            mc_feature_names = MonteCarloFeatures.get_feature_names(
-                horizons=mc_horizons
-            )
-            features.extend(mc_feature_names)
-        except Exception:
-            # If import fails, return base features only
-            pass
-
-    # deduplicate while preserving order
-    return list(dict.fromkeys(features))
-
-
-def prepare_model_features(data, feature_names):
-    """
-    Select model features and replace missing or non-finite values.
-    """
-
-    return data[feature_names].replace([float("inf"), -float("inf")], 0).fillna(0)
+    return FeaturePipeline.get_model_feature_manifest(
+        include_monte_carlo=include_monte_carlo,
+        mc_horizons=mc_horizons,
+    )
 
 
 # define leakage features
@@ -136,13 +103,15 @@ class OvernightDirectionModel:
             1) config (dict): Model configuration
         """
 
-        self.config = config or {}
+        self.config = validate_training_config(config)
         self.model = None
         self.feature_names = SAFE_FEATURES
         self.trained_date = None
         self.metrics = {}
         self.model_id = uuid.uuid4().hex
         self.dataset_metadata = {}
+        self.feature_manifest_version = MODEL_FEATURE_MANIFEST_VERSION
+        self.mc_semantics_version = None
 
         # determine whether to include Monte Carlo features from config (safe default False)
         include_mc = False
@@ -156,6 +125,8 @@ class OvernightDirectionModel:
         self.feature_names = get_safe_features(
             include_monte_carlo=include_mc, mc_horizons=mc_horizons
         )
+        if include_mc:
+            self.mc_semantics_version = MonteCarloFeatures.SEMANTICS_VERSION
 
     @staticmethod
     def load_data(data_path):
@@ -190,7 +161,7 @@ class OvernightDirectionModel:
         """
 
         # filter out non-safe features and fill missing/non-finite values
-        X = prepare_model_features(data, self.feature_names)
+        X = prepare_model_features(data, self.feature_names, strict=True)
         y = data["target"]
 
         return X, y
@@ -320,6 +291,8 @@ class OvernightDirectionModel:
             "target_version": TARGET_VERSION,
             "model_id": self.model_id,
             "dataset_metadata": self.dataset_metadata,
+            "feature_manifest_version": self.feature_manifest_version,
+            "mc_semantics_version": self.mc_semantics_version,
             "trained_date": self.trained_date,
             "config": self.config,
             "metrics": self.metrics,
