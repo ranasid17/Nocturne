@@ -66,6 +66,8 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
+For an installable application package, use `python -m pip install .`. Add `[research]` only for the legacy exploratory dashboards, plotting, or local LLM reporting; prediction and the Flask dashboard do not need those optional packages.
+
 On Windows PowerShell, create it with `py -3 -m venv .venv` and activate with `.venv\Scripts\Activate.ps1`, then run the same pip commands. Run all commands below from the repository root with this environment active.
 
 3. **Set up environment variables**:
@@ -98,6 +100,8 @@ flask --app app run
 Open <http://127.0.0.1:5000>. If port 5000 is occupied, use `flask --app app run --port 5050` and open <http://127.0.0.1:5050>. Stop the server with Ctrl+C. The equivalent interpreter-specific command is `python -m flask --app app run`.
 
 The page supports ticker entry, feature generation, predictions with an optional maximum ATR percentage, and the latest 50 logged predictions. Requests run synchronously, so feature generation may take time. This is a local development app without authentication; keep the default loopback binding. GitHub hosts the source and PRs, not the Flask process. The separate GitHub Pages roadmap site cannot run this Python backend.
+
+The supported Flask workflow is prediction and feature preparation. Training, evaluation, backtesting, clustering, plotting, and optional Ollama reporting remain explicit CLI research workflows; they are not started by opening or refreshing the dashboard.
 
 A fresh clone has no market data or trained models because generated artifacts are ignored. The page still opens with an empty state. To run predictions, follow the CLI workflow below or supply your own compatible data and trained model:
 

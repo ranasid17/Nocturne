@@ -18,6 +18,7 @@ from qusa.analysis.clustering import ClusterAnalyzer
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
 from qusa.utils.formatting import format_header, format_box
+from qusa.services import run_clustering_workflow
 
 
 def parse_args():
@@ -421,15 +422,15 @@ def main():
         return 1
 
     try:
-        logger.info("Loading processed data...")
-        processed_dir = paths["processed_data_dir"]
-        data_path = os.path.join(processed_dir, f"{ticker}_processed.csv")
-        data = pd.read_csv(data_path)
-        logger.info(f"✓ Data loaded: {data.shape}")
+        result = run_clustering_workflow(ticker, config)
+        logger.info("Clustering complete: %s", result["output_path"])
+        logger.info("Regime statistics: %s", result["statistics_path"])
+        return 0
     except Exception as e:
-        logger.error(f"✗ Failed to load processed data: {e}")
+        logger.error(f"✗ Error during clustering analysis: {e}")
         return 1
 
+    # Legacy interactive plotting code is retained below for historical reference.
     confirm_directory(os.path.join(paths["figures_dir"], "dummy.txt"))
 
     try:

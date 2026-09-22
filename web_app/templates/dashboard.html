@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">Research workspace</p><h1>Predictions</h1></div><span class="tag">Overnight direction</span></div>
 <section class="controls" aria-label="Prediction inputs">
-  <form id="prediction-form" data-pipeline-url="{{ url_for('api.run_pipeline') }}" data-prediction-url="{{ url_for('api.run_prediction') }}" data-history-url="{{ url_for('api.prediction_history') }}">
+  <form id="prediction-form" data-pipeline-url="{{ url_for('api.run_pipeline') }}" data-prediction-url="{{ url_for('api.run_prediction') }}" data-history-url="{{ url_for('api.prediction_history') }}" data-latest-url="{{ url_for('api.latest_prediction') }}">
     <fieldset id="run-controls">
       <div class="input-row">
         <div class="field ticker-field">
@@ -25,16 +25,25 @@
 </section>
 <section class="result-section" aria-labelledby="result-heading">
   <div class="section-heading"><h2 id="result-heading">Latest result</h2><span id="result-ticker" class="muted"></span></div>
-  <p id="result-empty" class="empty">No prediction run in this session.</p>
+  <p id="result-empty" class="empty">No saved prediction is available for this ticker.</p>
   <div id="prediction-result" hidden>
     <dl class="metrics">
       <div><dt>Direction</dt><dd id="result-direction"></dd></div>
-      <div><dt>Probability up</dt><dd id="result-probability"></dd></div>
       <div><dt>Confidence</dt><dd id="result-confidence"></dd></div>
       <div><dt>Data date</dt><dd id="result-date"></dd></div>
-      <div><dt>Volatility filter</dt><dd id="result-filter"></dd></div>
+      <div><dt>Model probability</dt><dd id="result-probability"></dd></div>
+      <div><dt>Actual ATR / limit</dt><dd id="result-atr"></dd></div>
+      <div><dt>Risk status</dt><dd id="result-filter"></dd></div>
+      <div><dt>Target session</dt><dd id="result-target-session"></dd></div>
+      <div><dt>Readiness</dt><dd id="result-readiness"></dd></div>
+      <div><dt>Model ID</dt><dd id="result-model"></dd></div>
     </dl>
+    <p id="result-source" class="muted"></p>
   </div>
+</section>
+<section class="research-section" aria-labelledby="research-heading">
+  <div class="section-heading"><h2 id="research-heading">Data and research</h2></div>
+  <p class="muted">Generate features when local data changes. Training, backtests, clustering, and reports remain CLI research workflows.</p>
 </section>
 <section class="history-section" aria-labelledby="history-heading">
   <div class="section-heading"><h2 id="history-heading">Prediction history</h2><div class="history-tools"><span id="history-count" class="muted"></span><button id="refresh-history" class="icon-button" type="button" title="Refresh history" aria-label="Refresh history"><img src="{{ url_for('static', filename='icons/refresh-cw.svg') }}" alt=""></button></div></div>
