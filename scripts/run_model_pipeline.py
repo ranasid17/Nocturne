@@ -31,6 +31,7 @@ from qusa.model import (
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
 from qusa.utils.formatting import format_header, format_box
+from qusa.model.train import validate_training_config
 
 
 def parse_args():
@@ -60,7 +61,7 @@ def _build_model_config(config):
     """
 
     model_params = config["model"]["parameters"]
-    return {
+    model_config = {
         "max_depth": model_params.get("max_depth", 5),
         "min_samples_leaf": model_params.get("min_samples_leaf", 10),
         "min_samples_split": model_params.get("min_samples_split", 20),
@@ -70,7 +71,9 @@ def _build_model_config(config):
         "cv": model_params.get("cv", 5),
         "probability_threshold": model_params.get("probability_threshold", 0.6),
         "monte_carlo": config.get("monte_carlo", {}),
+        "tuning": model_params.get("tuning", {}),
     }
+    return validate_training_config(model_config)
 
 
 def _reports_enabled(config, report_type):

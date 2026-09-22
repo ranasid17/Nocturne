@@ -8,10 +8,13 @@ day data.
 
 import logging
 import joblib
+import math
 import os
+import numpy as np
 import pandas as pd
 
 from datetime import datetime
+from qusa.model.dataset import DatasetContractError, prepare_model_features
 from qusa.utils.formatting import format_prediction_card
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,19 @@ class LivePredictor:
         self.features = bundle["features"]
         self.threshold = bundle["threshold"]
         self.trained_date = bundle.get("trained_date", "Unknown")
+        self.feature_manifest_version = bundle.get("feature_manifest_version", "legacy")
+        self.model_id = bundle.get("model_id")
+
+        if not isinstance(self.features, list) or not self.features:
+            raise ValueError("Model bundle has no usable feature manifest.")
+        if len(set(self.features)) != len(self.features):
+            raise ValueError("Model bundle feature manifest contains duplicates.")
+        model_feature_names = getattr(self.model, "feature_names_in_", None)
+        if model_feature_names is not None and list(model_feature_names) != self.features:
+            raise ValueError("Model feature schema does not match its saved manifest.")
+        model_feature_count = getattr(self.model, "n_features_in_", None)
+        if model_feature_count is not None and model_feature_count != len(self.features):
+            raise ValueError("Model feature count does not match its saved manifest.")
 
         logger.info(f"✓ Model loaded (trained: {self.trained_date})")
 
@@ -60,15 +76,25 @@ class LivePredictor:
             1) prediction (dict): Results
         """
 
+        if data.empty:
+            raise ValueError("Prediction data has no rows.")
+
         # get latest row
         latest = data.tail(1)
 
-        # extract features
-        X = latest[self.features].fillna(0)
+        try:
+            X = prepare_model_features(latest, self.features, strict=True)
+        except DatasetContractError as exc:
+            raise ValueError(str(exc)) from exc
 
         # predict labels and probabilities
         y_pred = self.model.predict(X)[0]
-        y_prob = self.model.predict_proba(X)[0, 1]
+        probabilities = self.model.predict_proba(X)[0]
+        classes = list(getattr(self.model, "classes_", []))
+        if 1 not in classes:
+            y_prob = 0.0
+        else:
+            y_prob = float(probabilities[classes.index(1)])
 
         # interpret prediction
         if y_pred == 1:
@@ -84,15 +110,33 @@ class LivePredictor:
 
         # check volatility filter
         vol_triggered = False
-        atr_pct = 0.0
+        atr_pct = None
+        volatility_state = "disabled"
+        volatility_threshold = None
         if volatility_filter and volatility_filter.get("enabled", False):
-            if "atr_pct" in latest.columns:
-                atr_pct = latest["atr_pct"].iloc[0]
-                max_atr = volatility_filter.get("max_atr_pct", 100.0)
-                if atr_pct > max_atr:
-                    vol_triggered = True
+            volatility_threshold = volatility_filter.get("max_atr_pct", 100.0)
+            if (
+                isinstance(volatility_threshold, bool)
+                or not isinstance(volatility_threshold, (int, float))
+                or not math.isfinite(float(volatility_threshold))
+                or float(volatility_threshold) < 0
+            ):
+                raise ValueError("Volatility threshold must be a finite non-negative number.")
+            volatility_threshold = float(volatility_threshold)
+            raw_atr = latest["atr_pct"].iloc[0] if "atr_pct" in latest.columns else None
+            if (
+                raw_atr is None
+                or isinstance(raw_atr, bool)
+                or not isinstance(raw_atr, (int, float, np.number))
+                or not np.isfinite(raw_atr)
+                or raw_atr < 0
+            ):
+                volatility_state = "unavailable"
+                logger.warning("Volatility filter is unavailable because atr_pct is missing or invalid.")
             else:
-                logger.warning("⚠ Volatility filter enabled but 'atr_pct' column not found in data.")
+                atr_pct = float(raw_atr)
+                vol_triggered = atr_pct > volatility_threshold
+                volatility_state = "blocked" if vol_triggered else "pass"
 
         # store prediction metadata in dictionary
         prediction = {
@@ -102,7 +146,11 @@ class LivePredictor:
             "probability_up": y_prob,
             "confidence": confidence,
             "volatility_filter_triggered": vol_triggered,
-            "atr_pct": atr_pct
+            "atr_pct": atr_pct,
+            "volatility_state": volatility_state,
+            "volatility_threshold": volatility_threshold,
+            "model_id": self.model_id,
+            "feature_manifest_version": self.feature_manifest_version,
         }
 
         return prediction

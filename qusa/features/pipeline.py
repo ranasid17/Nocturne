@@ -7,6 +7,41 @@ from qusa.features.monte_carlo import MonteCarloFeatures
 from qusa.features.volatility import VolatilityCalculator
 
 
+MODEL_FEATURE_MANIFEST_VERSION = "v2"
+MODEL_BASE_FEATURES = [
+    "52_week_high_proximity",
+    "52_week_low_proximity",
+    "atr_pct",
+    "close_position",
+    "rsi",
+    "volume_ratio",
+    "day_of_week",
+    "day_of_month",
+    "month_of_year",
+    "first_5d_month",
+    "final_5d_month",
+    "is_monday",
+    "is_tuesday",
+    "is_wednesday",
+    "is_thursday",
+    "is_friday",
+    "is_jan",
+    "is_feb",
+    "is_mar",
+    "is_apr",
+    "is_may",
+    "is_jun",
+    "is_jul",
+    "is_aug",
+    "is_sep",
+    "is_oct",
+    "is_nov",
+    "is_dec",
+    "vwap_deviation",
+    "vol_regime",
+]
+
+
 class FeaturePipeline:
     """
     Pipeline to apply multiple feature calculations to financial time series data.
@@ -21,6 +56,12 @@ class FeaturePipeline:
         """
 
         self.config = config or {}
+        feature_params = self.config.get("feature_params")
+        if feature_params is None:
+            feature_params = self.config.get("technical_params", {})
+        volatility_params = self.config.get("feature_params")
+        if volatility_params is None:
+            volatility_params = self.config.get("features", feature_params)
 
         self.overnight_calculator = OvernightCalculator(
             date_col=self.config.get("date_col", "date"),
@@ -31,10 +72,10 @@ class FeaturePipeline:
             date_col=self.config.get("date_col", "date")
         )
         self.volatility_calculator = VolatilityCalculator(
-            config=self.config.get("features", {})
+            config=volatility_params
         )
         self.technical_indicators = TechnicalIndicators(
-            config=self.config.get("technical_params", {}),
+            config=feature_params,
             date_col=self.config.get("date_col", "date"),
             open_col=self.config.get("open_col", "open"),
             close_col=self.config.get("close_col", "close"),
@@ -136,3 +177,12 @@ class FeaturePipeline:
             features.extend(MonteCarloFeatures.get_feature_names(horizons=mc_horizons))
 
         return features
+
+    @staticmethod
+    def get_model_feature_manifest(include_monte_carlo=False, mc_horizons=None):
+        """Return the ordered feature contract used by model training and inference."""
+
+        features = MODEL_BASE_FEATURES.copy()
+        if include_monte_carlo:
+            features.extend(MonteCarloFeatures.get_feature_names(horizons=mc_horizons))
+        return list(dict.fromkeys(features))

@@ -83,8 +83,9 @@ function showPrediction(data, selectedTicker) {
   document.querySelector("#result-probability").textContent = probability(result.probability_up);
   document.querySelector("#result-confidence").textContent = display(result.confidence);
   document.querySelector("#result-date").textContent = dateLabel(result.date);
-  document.querySelector("#result-filter").textContent = result.volatility_filter_triggered ? "Triggered" :
-    data.volatility_filter?.enabled ? "Within limit" : "Disabled";
+  const volatilityLabels = {disabled: "Disabled", pass: "Within limit", blocked: "Triggered", unavailable: "Unavailable"};
+  document.querySelector("#result-filter").textContent = volatilityLabels[result.volatility_state] ||
+    (result.volatility_filter_triggered ? "Triggered" : data.volatility_filter?.enabled ? "Within limit" : "Disabled");
   document.querySelector("#result-ticker").textContent = data.ticker || selectedTicker;
   document.querySelector("#result-empty").hidden = true;
   document.querySelector("#prediction-result").hidden = false;

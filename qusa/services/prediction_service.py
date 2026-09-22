@@ -96,6 +96,9 @@ def make_latest_prediction(
         "confidence": prediction.get("confidence"),
         "atr_pct": prediction.get("atr_pct"),
         "volatility_filter_triggered": prediction.get("volatility_filter_triggered"),
+        "volatility_state": prediction.get("volatility_state"),
+        "volatility_threshold": prediction.get("volatility_threshold"),
+        "model_id": prediction.get("model_id"),
     }
 
     should_save = config.get("prediction", {}).get("save", True)
