@@ -49,6 +49,8 @@ class ModelBacktester:
         self.model = bundle["model"]
         self.features = bundle["features"]
         self.threshold = bundle["threshold"]
+        self.model_id = bundle.get("model_id")
+        self.dataset_metadata = bundle.get("dataset_metadata", {})
 
         logger.info(f"✓ Model loaded")
 
@@ -59,10 +61,19 @@ class ModelBacktester:
         # load data from path and confirm datetime type
         self.data = pd.read_csv(self.backtest_data_path)
         self.data["date"] = pd.to_datetime(self.data["date"])
+        if self.data["date"].duplicated().any() or not self.data["date"].is_monotonic_increasing:
+            raise ValueError("Backtest data must have unique dates sorted in ascending order.")
 
         logger.info(f"✓ Loaded {len(self.data)} days of data")
 
-    def run_backtest(self, initial_capital, position_size, transaction_cost, volatility_filter=None):
+    def run_backtest(
+        self,
+        initial_capital,
+        position_size,
+        transaction_cost,
+        volatility_filter=None,
+        minimum_outcome_date=None,
+    ):
         """
         Simulate backtest with pure Overnight logic.
         Buy Close -> Sell Open next day if signal is high confidence.
@@ -77,10 +88,11 @@ class ModelBacktester:
         logger.info("\n" + "=" * 80)
         logger.info(f"RUNNING BACKTEST (Overnight Only | Cost: {transaction_cost}% per side)")
         logger.info("=" * 80)
+        self.initial_capital = initial_capital
 
         # extract features and probabilities for full dataset
         X = prepare_model_features(self.data, self.features)
-        y_prob = self.model.predict_proba(X)[:, 1]
+        y_prob = _probability_of_up(self.model, X)
 
         # store relevant columns from dataset for backtest
         results = self.data[["date", "close", "overnight_delta"]].copy()
@@ -90,6 +102,7 @@ class ModelBacktester:
             results["atr_pct"] = self.data["atr_pct"]
             
         results["probability_up"] = y_prob
+        results["outcome_date"] = results["date"].shift(-1)
 
         # identify high confidence signals
         results["signal"] = 0
@@ -109,13 +122,22 @@ class ModelBacktester:
             else:
                 logger.warning("⚠ Volatility filter enabled but 'atr_pct' column not found in data.")
 
-        # calculate returns per trade
-        # Overnight return for signal at Day T is (Open_T+1 - Close_T) / Close_T
-        # In our data, this is the 'overnight_delta' of the NEXT row.
-        results["overnight_return"] = results["overnight_delta"].shift(-1) / 100
+        # The signal is formed at the close on Day T. Its outcome is the next
+        # session's opening move, measured against the Day T close.
+        results["overnight_return"] = (
+            results["overnight_delta"].shift(-1) / results["close"]
+        )
 
         # Drop the last row as we don't have the next day's open yet
-        results = results.iloc[:-1]
+        results = results.iloc[:-1].copy()
+        results["invalid_outcome"] = ~np.isfinite(results["overnight_return"])
+        results.loc[results["invalid_outcome"], "signal"] = 0
+
+        if minimum_outcome_date is not None:
+            boundary = pd.Timestamp(minimum_outcome_date)
+            results = results.loc[results["outcome_date"] > boundary].copy()
+            if results.empty:
+                raise ValueError("No backtest rows remain after the training outcome boundary.")
 
         # simulate strategy
         results["strategy_return"] = 0.0
@@ -191,9 +213,13 @@ class ModelBacktester:
             else 0
         )
 
-        # Max drawdown
-        peak = self.results["strategy_value"].cummax()
-        drawdown = (self.results["strategy_value"] - peak) / peak
+        # Include the initial cash balance so a first-period loss is a drawdown.
+        equity = pd.concat(
+            [pd.Series([initial_capital]), self.results["strategy_value"]],
+            ignore_index=True,
+        )
+        peak = equity.cummax()
+        drawdown = (equity - peak) / peak
         max_dd = drawdown.min()
 
         metrics = {
@@ -286,8 +312,12 @@ class ModelBacktester:
         ax1.legend(loc="upper left")
 
         # 2. Drawdown
-        peak = self.results["strategy_value"].cummax()
-        drawdown = (self.results["strategy_value"] - peak) / peak
+        equity = pd.concat(
+            [pd.Series([self.initial_capital]), self.results["strategy_value"]],
+            ignore_index=True,
+        )
+        peak = equity.cummax()
+        drawdown = ((equity - peak) / peak).iloc[1:]
         ax2.fill_between(self.results["date"], drawdown * 100, 0, color="#ef4444", alpha=0.3)
         ax2.plot(self.results["date"], drawdown * 100, color="#ef4444", linewidth=1)
         ax2.set_title("Strategy Drawdown (%)", fontsize=12, fontweight="bold")
@@ -313,3 +343,13 @@ class ModelBacktester:
         plt.close()
 
         logger.info(f"\n✓ Comprehensive results saved to {save_path}")
+
+
+def _probability_of_up(model, features):
+    """Return class-one probabilities for normal and legacy model bundles."""
+
+    probabilities = model.predict_proba(features)
+    classes = list(getattr(model, "classes_", []))
+    if 1 not in classes:
+        return np.zeros(len(features))
+    return probabilities[:, classes.index(1)]
