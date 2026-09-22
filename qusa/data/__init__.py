@@ -2,5 +2,6 @@
 
 from .fetcher import PolygonFetcher
 from .loader import DataLoader
+from .sessions import NyseSessionCalendar
 
-__all__ = ["PolygonFetcher", "DataLoader"]
+__all__ = ["PolygonFetcher", "DataLoader", "NyseSessionCalendar"]

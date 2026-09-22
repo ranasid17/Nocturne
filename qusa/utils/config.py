@@ -1,12 +1,6 @@
 # qusa/utils/config.py
 
-import os
-import yaml
-
-from pathlib import Path
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from qusa.utils.settings import PROJECT_ROOT, load_settings
 
 
 def load_env(env_path=".env"):
@@ -14,23 +8,9 @@ def load_env(env_path=".env"):
     Load environment variables from a .env file.
     Only basic KEY=VALUE pairs are supported.
     """
-    env_path = Path(env_path).expanduser()
-    if not env_path.exists():
-        return
+    from dotenv import load_dotenv
 
-    with open(env_path, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, value = line.split("=", 1)
-                key = key.strip()
-                value = value.strip()
-                # Strip leading/trailing quotes if they exist
-                if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
-                    value = value[1:-1]
-                os.environ.setdefault(key, value)
+    load_dotenv(env_path, override=False)
 
 
 def load_config(config_path="config.yaml"):
@@ -41,20 +21,4 @@ def load_config(config_path="config.yaml"):
         1) config_path (str): Path to the YAML configuration file.
     """
 
-    load_env(PROJECT_ROOT / ".env")
-    config_path = Path(config_path).expanduser()
-
-    with open(config_path, "r") as file:
-        config = yaml.safe_load(file)
-
-    # expand user paths
-    for section in config.values():
-        if isinstance(section, dict):
-            for key, value in section.items():
-                if isinstance(value, str) and value.startswith("~"):
-                    section[key] = os.path.expanduser(value)
-                if isinstance(value, dict):
-                    for subkey, subvalue in value.items():
-                        if isinstance(subvalue, str) and subvalue.startswith("~"):
-                            section[key][subkey] = os.path.expanduser(subvalue)
-    return config
+    return load_settings(config_path, project_root=PROJECT_ROOT)

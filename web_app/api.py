@@ -6,6 +6,7 @@ import re
 from flask import Blueprint, current_app, jsonify, request
 
 from qusa.utils.config import load_config
+from qusa.storage.locks import TickerBusyError
 
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -111,6 +112,8 @@ def health():
 def tickers():
     try:
         return jsonify({"success": True, "tickers": _available_tickers()})
+    except TickerBusyError:
+        return _error_response("Ticker is currently busy. Try again shortly.", 409, "ticker_busy")
     except Exception as exc:
         return _service_error_response("ticker_lookup", exc)
 
@@ -130,6 +133,8 @@ def run_pipeline():
         return jsonify(_json_safe(result))
     except RequestValidationError as exc:
         return _error_response(str(exc), 400, "invalid_request")
+    except TickerBusyError:
+        return _error_response("Ticker is currently busy. Try again shortly.", 409, "ticker_busy")
     except Exception as exc:
         return _service_error_response("feature_pipeline", exc)
 
@@ -158,6 +163,8 @@ def run_prediction():
         return jsonify(_json_safe(result))
     except RequestValidationError as exc:
         return _error_response(str(exc), 400, "invalid_request")
+    except TickerBusyError:
+        return _error_response("Ticker is currently busy. Try again shortly.", 409, "ticker_busy")
     except FileNotFoundError as exc:
         current_app.logger.warning("prediction artifact missing: %s", _redact_sensitive_text(exc))
         return _error_response(

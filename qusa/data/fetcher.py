@@ -9,7 +9,13 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 
+from qusa.data.sessions import NyseSessionCalendar
+
 logger = logging.getLogger(__name__)
+
+
+class LatestBarUnavailableError(ValueError):
+    """Raised when a completed session does not yet have provider data."""
 
 
 class PolygonFetcher:
@@ -17,7 +23,7 @@ class PolygonFetcher:
     Client for the Polygon.io Stocks API.
     """
 
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, session_calendar=None, clock=None):
         """
         Initialize the fetcher.
         
@@ -29,6 +35,7 @@ class PolygonFetcher:
             raise ValueError("POLYGON_API_KEY environment variable or api_key parameter is required.")
         
         self.base_url = "https://api.polygon.io"
+        self.sessions = session_calendar or NyseSessionCalendar(clock=clock)
 
     def _get_most_recent_trading_day(self):
         """
@@ -37,18 +44,10 @@ class PolygonFetcher:
         Returns:
             1) str: ISO format date (YYYY-MM-DD).
         """
-        # Get current UTC time
-        now = datetime.now(timezone.utc)
-        
-        # If it's before 4 PM ET (approx 21:00 UTC), the current day's close data might not be ready.
-        # For simplicity, we default to yesterday and roll back weekends.
-        target_date = now.date() - timedelta(days=1)
-        
-        # Roll back Saturday (5) to Friday, Sunday (6) to Friday
-        while target_date.weekday() >= 5:
-            target_date -= timedelta(days=1)
-            
-        return target_date.isoformat()
+        completed_session = self.sessions.most_recent_completed_session()
+        if completed_session is None:
+            raise LatestBarUnavailableError("No completed NYSE session is available yet.")
+        return completed_session["date"]
 
     def fetch_latest_day(self, ticker):
         """
@@ -70,7 +69,9 @@ class PolygonFetcher:
         data = response.json()
         status = data.get("status")
         if status not in ["OK", "DELAYED"]:
-            raise ValueError(f"Polygon API returned non-OK status: {status}")
+            raise LatestBarUnavailableError(
+                f"Polygon API returned non-OK status for completed session {date}: {status}"
+            )
             
         row = {
             "date": date,
@@ -81,7 +82,10 @@ class PolygonFetcher:
             "volume": data["volume"]
         }
         
-        return pd.DataFrame([row])
+        frame = pd.DataFrame([row])
+        frame.attrs["completed_session"] = date
+        frame.attrs["provider_status"] = status
+        return frame
 
     def fetch_historical_range(self, ticker, start, end):
         """
