@@ -75,20 +75,45 @@ function clearResult() {
   document.querySelector("#result-ticker").textContent = "";
 }
 
-function showPrediction(data, selectedTicker) {
-  const result = data.prediction;
+function showPrediction(data, selectedTicker, source = "Current session") {
+  const result = data.prediction || data;
   if (!result || typeof result !== "object") throw new Error("Invalid prediction response.");
   document.querySelector("#result-direction").textContent = display(result.direction);
   document.querySelector("#result-direction").className = directionClass(result.direction);
-  document.querySelector("#result-probability").textContent = probability(result.probability_up);
   document.querySelector("#result-confidence").textContent = display(result.confidence);
-  document.querySelector("#result-date").textContent = dateLabel(result.date);
+  document.querySelector("#result-date").textContent = dateLabel(result.date || result.feature_date);
+  document.querySelector("#result-probability").textContent = probability(result.probability_up);
+  const atr = result.atr_pct;
+  const limit = result.volatility_threshold ?? data.volatility_filter?.max_atr_pct;
+  document.querySelector("#result-atr").textContent = `${display(atr)}${atr === null || atr === undefined ? "" : "%"} / ${display(limit)}${limit === null || limit === undefined ? "" : "%"}`;
   const volatilityLabels = {disabled: "Disabled", pass: "Within limit", blocked: "Triggered", unavailable: "Unavailable"};
-  document.querySelector("#result-filter").textContent = volatilityLabels[result.volatility_state] ||
+  const risk = volatilityLabels[result.volatility_state] ||
     (result.volatility_filter_triggered ? "Triggered" : data.volatility_filter?.enabled ? "Within limit" : "Disabled");
+  document.querySelector("#result-filter").textContent = risk;
+  document.querySelector("#result-filter").className = risk === "Within limit" ? "up" : risk === "Triggered" || risk === "Unavailable" ? "down" : "";
+  const readiness = result.readiness || data.readiness || {};
+  document.querySelector("#result-target-session").textContent = display(readiness.target_session);
+  document.querySelector("#result-readiness").textContent = display(result.readiness_status || readiness.status);
+  document.querySelector("#result-model").textContent = display(result.model_id);
   document.querySelector("#result-ticker").textContent = data.ticker || selectedTicker;
+  document.querySelector("#result-source").textContent = source;
   document.querySelector("#result-empty").hidden = true;
   document.querySelector("#prediction-result").hidden = false;
+}
+
+async function loadLatest() {
+  const selectedTicker = ticker();
+  if (!selectedTicker) return clearResult();
+  try {
+    const url = new URL(form.dataset.latestUrl, window.location.origin);
+    url.searchParams.set("ticker", selectedTicker);
+    const data = await requestJSON(url);
+    if (ticker() !== selectedTicker) return;
+    if (data.prediction) showPrediction(data.prediction, selectedTicker, "Saved latest result");
+    else clearResult();
+  } catch (error) {
+    if (ticker() === selectedTicker) clearResult();
+  }
 }
 
 async function run(kind) {
@@ -112,7 +137,7 @@ async function run(kind) {
       runStatus.textContent = `${selectedTicker}: ${display(data.rows)} rows saved to ${display(data.output_path)}`;
     } else {
       showPrediction(data, selectedTicker);
-      runStatus.textContent = `Prediction complete for ${selectedTicker}.`;
+      runStatus.textContent = `Prediction complete for ${selectedTicker}.${data.run_id ? ` Run ${data.run_id}.` : ""}`;
       await loadHistory();
     }
     runStatus.className = "success";
@@ -138,6 +163,7 @@ tickerInput.addEventListener("input", () => {
   clearResult();
   runStatus.textContent = "";
   clearTimeout(tickerTimer);
-  tickerTimer = setTimeout(loadHistory, 250);
+  tickerTimer = setTimeout(() => { loadHistory(); loadLatest(); }, 250);
 });
 loadHistory();
+loadLatest();

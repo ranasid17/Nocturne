@@ -32,6 +32,7 @@ from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
 from qusa.utils.formatting import format_header, format_box
 from qusa.model.train import validate_training_config
+from qusa.services import run_model_workflow
 
 
 def parse_args():
@@ -400,28 +401,16 @@ def main():
         logger.info(f"\n>>> PROCESSING TICKER: {ticker} <<<")
 
         try:
-            phase_results = []
-
-            if skip_training:
-                logger.info("Skipping training as per configuration.")
-            else:
-                phase_results.append(_run_training(ticker, paths, config, logger))
-
-            if skip_evaluation:
-                logger.info("Skipping evaluation as per configuration.")
-            else:
-                phase_results.append(_run_evaluation(ticker, paths, config, logger))
-
-            if skip_backtest:
-                logger.info("Skipping backtest as per configuration.")
-            else:
-                phase_results.append(_run_backtest(ticker, paths, config, logger, volatility_override=args.volatility))
-
-            if all(phase_results) if phase_results else True:
+            workflow = run_model_workflow(
+                ticker, config, volatility_override=args.volatility, logger=logger
+            )
+            for phase_name, phase in workflow["phases"].items():
+                logger.info("%s: %s", phase_name, phase["status"])
+            if workflow["success"]:
                 success_count += 1
                 logger.info(f"Pipeline successful for {ticker}")
             else:
-                logger.warning(f"Pipeline completed with skipped or failed phases for {ticker}")
+                logger.warning("Pipeline completed with failed phases for %s (run %s)", ticker, workflow["run_id"])
 
         except Exception as exc:
             logger.error(f"Pipeline failed for {ticker}: {exc}", exc_info=True)
