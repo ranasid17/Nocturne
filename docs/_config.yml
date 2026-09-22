@@ -1,4 +1,4 @@
-title: Nocturne Product Roadmap
-description: Roadmap and planning docs for the Nocturne small-team signal app.
+title: Nocturne Documentation
+description: Local Flask and SQLite operations for the Nocturne signal application.
 markdown: kramdown
 theme: minima

@@ -1,4 +1,9 @@
-# Nocturne Small-Team Signal App Roadmap
+# Nocturne Documentation
+
+> The content below is an archived pre-remediation roadmap. The current supported
+> application is this repository's local Flask app, using SQLite for run and
+> prediction metadata. See [operations](operations.md) and
+> [legacy surfaces](legacy_surfaces.md) for current operational boundaries.
 
 > Draft for team review before implementation.
 
