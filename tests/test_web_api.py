@@ -132,30 +132,29 @@ def test_ticker_busy_is_reported_as_a_conflict(client, monkeypatch, endpoint, se
 
 
 def test_history_filter_order_limit_and_nulls(client, monkeypatch, tmp_path):
-    path = tmp_path / "predictions.csv"
-    rows = [{"ticker": "UPRO", "timestamp": str(stamp), "probability_up": None}
-            for stamp in pd.date_range("2026-01-01", periods=55)]
-    rows.append({"ticker": "AAPL", "timestamp": "2027-01-01", "probability_up": 0.9})
-    pd.DataFrame(rows).to_csv(path, index=False)
-    monkeypatch.setattr(api, "_prediction_log_path", lambda: path)
+    from qusa.storage.runs import RunRepository
+    repository = RunRepository(tmp_path / "history.sqlite3")
+    run_ids = []
+    for stamp in pd.date_range("2026-01-01", periods=55):
+        run = repository.create_run("prediction", "UPRO")
+        repository.record_prediction(run["id"], {"ticker": "UPRO", "timestamp": str(stamp), "probability_up": None})
+        run_ids.append(run["id"])
+    monkeypatch.setattr(api, "_prediction_repository", lambda: repository)
     response = client.get("/api/predictions/history?ticker=upro")
     assert response.status_code == 200
     history = response.get_json()["history"]
     assert len(history) == 50
-    assert history[0]["timestamp"] == rows[54]["timestamp"]
+    assert history[0]["timestamp"] == str(pd.Timestamp("2026-02-24"))
     assert all(row["ticker"] == "UPRO" and row["probability_up"] is None for row in history)
 
 
 def test_history_missing_and_empty(client, monkeypatch, tmp_path):
-    path = tmp_path / "predictions.csv"
-    monkeypatch.setattr(api, "_prediction_log_path", lambda: path)
-    assert client.get("/api/predictions/history").get_json()["history"] == []
-    path.touch()
+    from qusa.storage.runs import RunRepository
+    monkeypatch.setattr(api, "_prediction_repository", lambda: RunRepository(tmp_path / "history.sqlite3"))
     assert client.get("/api/predictions/history").get_json()["history"] == []
 
 
 def test_history_does_not_read_text_log(client, monkeypatch, tmp_path):
-    path = tmp_path / "prediction.log"
-    path.write_text("This is a text log, not prediction data.")
-    monkeypatch.setattr(api, "_load_app_config", lambda: {"prediction": {"log_file": str(path)}})
+    from qusa.storage.runs import RunRepository
+    monkeypatch.setattr(api, "_prediction_repository", lambda: RunRepository(tmp_path / "history.sqlite3"))
     assert client.get("/api/predictions/history").get_json()["history"] == []
