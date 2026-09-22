@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from qusa.utils.config import load_config
 from qusa.storage.locks import TickerBusyError
+from qusa.storage.runs import RunRepository
 
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -96,11 +97,8 @@ def _available_tickers():
     return sorted(tickers)
 
 
-def _prediction_log_path():
-    config = _load_app_config()
-    prediction_config = config.get("prediction", {})
-    raw_path = prediction_config.get("csv_log")
-    return Path(raw_path).expanduser() if raw_path else None
+def _prediction_repository():
+    return RunRepository.from_config(_load_app_config())
 
 
 @api_bp.route("/health", methods=["GET"])
@@ -177,33 +175,45 @@ def run_prediction():
 @api_bp.route("/predictions/history", methods=["GET"])
 def prediction_history():
     try:
-        import pandas as pd
-
-        log_path = _prediction_log_path()
-        if not log_path or not log_path.exists():
-            return jsonify({"success": True, "history": []})
-
-        try:
-            history = pd.read_csv(log_path)
-        except pd.errors.EmptyDataError:
-            return jsonify({"success": True, "history": []})
-        if history.empty:
-            return jsonify({"success": True, "history": []})
-
         ticker = request.args.get("ticker", "").strip().upper()
-        if ticker and "ticker" in history.columns:
-            history = history[history["ticker"].astype(str).str.upper() == ticker]
-
-        if "timestamp" in history.columns:
-            history = history.sort_values(
-                "timestamp", ascending=False,
-                key=lambda values: pd.to_datetime(values, errors="coerce", utc=True),
-                kind="stable",
-            )
-        else:
-            history = history.iloc[::-1]
-
-        rows = history.head(50).where(pd.notna(history), None).to_dict(orient="records")
-        return jsonify({"success": True, "history": _json_safe(rows)})
+        limit = _bounded_int(request.args.get("limit"), default=50, maximum=100)
+        offset = _bounded_int(request.args.get("offset"), default=0, maximum=1_000_000)
+        history = _prediction_repository().list_predictions(ticker=ticker or None, limit=limit, offset=offset)
+        return jsonify({"success": True, "history": _json_safe(history), "next_offset": offset + len(history) if len(history) == limit else None})
+    except RequestValidationError as exc:
+        return _error_response(str(exc), 400, "invalid_request")
     except Exception as exc:
         return _service_error_response("prediction_history", exc)
+
+
+def _bounded_int(raw_value, default, maximum):
+    if raw_value is None:
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise RequestValidationError("Pagination values must be integers.") from exc
+    if value < 0 or value > maximum:
+        raise RequestValidationError(f"Pagination values must be between 0 and {maximum}.")
+    return value
+
+
+@api_bp.route("/predictions/latest", methods=["GET"])
+def latest_prediction():
+    try:
+        ticker = request.args.get("ticker", "").strip().upper()
+        prediction = _prediction_repository().latest_prediction(ticker=ticker or None)
+        return jsonify({"success": True, "prediction": _json_safe(prediction)})
+    except Exception as exc:
+        return _service_error_response("latest_prediction", exc)
+
+
+@api_bp.route("/runs/<run_id>", methods=["GET"])
+def run_detail(run_id):
+    try:
+        run = _prediction_repository().get_run(run_id)
+        if run is None:
+            return _error_response("Run was not found.", 404, "run_not_found")
+        return jsonify({"success": True, "run": _json_safe(run)})
+    except Exception as exc:
+        return _service_error_response("run_detail", exc)

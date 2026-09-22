@@ -59,9 +59,14 @@ def load_settings(config_path=None, environ=None, project_root=None):
         config.get("data", {}).get("paths", {}),
         config.get("model", {}).get("output", {}),
         config.get("prediction", {}),
+        config.get("storage", {}),
     ]
     for section in path_sections:
         for key, value in list(section.items()):
             if isinstance(value, str) and (key.endswith("_path") or key.endswith("_dir")):
                 section[key] = _resolve_path(value, selected_path.parent)
+    if environment.get("QUSA_DATABASE_PATH"):
+        config.setdefault("storage", {})["database_path"] = _resolve_path(
+            environment["QUSA_DATABASE_PATH"], selected_path.parent
+        )
     return config

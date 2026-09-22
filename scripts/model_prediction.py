@@ -13,7 +13,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from qusa.services import make_latest_prediction, save_prediction_log
+from qusa.services import make_latest_prediction
 from qusa.utils.config import load_config
 from qusa.utils.logger import setup_logger
 

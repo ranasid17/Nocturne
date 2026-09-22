@@ -85,7 +85,7 @@ Keep `qusa/utils/config.yaml` unchanged unless you intentionally maintain a loca
 export QUSA_DATA_ROOT="$PWD/data"
 ```
 
-Set `QUSA_CONFIG_PATH` to use a separate YAML file. Exported values take precedence; neither setting rewrites an existing configuration file.
+Set `QUSA_CONFIG_PATH` to use a separate YAML file. Set `QUSA_DATABASE_PATH` to place the local SQLite run history elsewhere; by default it is `data/predictions/qusa.sqlite3` (or the equivalent beneath `QUSA_DATA_ROOT`). Exported values take precedence; neither setting rewrites an existing configuration file.
 
 Set `reporting.enabled: false` unless you have a local Ollama server and the model specified in `reporting.llm.model`. AI reporting is optional; it is not required to serve the Flask dashboard.
 
@@ -104,7 +104,7 @@ A fresh clone has no market data or trained models because generated artifacts a
 - Ticker discovery reads `data/raw/{TICKER}_history.csv`.
 - Feature generation writes `data/processed/{TICKER}_processed.csv` and currently requires a Polygon API key even when using local history, because the loader initializes the API client.
 - Prediction requires `saved_models/{ticker_lowercase}_model.pkl` and processed data. Training is performed through the CLI, not the Flask page.
-- Prediction logging uses `prediction.csv_log` when `prediction.save` is enabled.
+- Prediction runs and history are stored in the local SQLite database. The legacy CSV setting is no longer written during normal operation.
 
 Paths above assume the relative configuration shown earlier. The **Fetch latest data** option needs a valid Polygon API key and network access. Missing models/data produce an error in the page rather than creating a model automatically.
 
@@ -126,7 +126,32 @@ npm install --prefix /tmp/nocturne-browser-tools playwright
 NODE_PATH=/tmp/nocturne-browser-tools/node_modules node tests/web_dashboard.cjs http://127.0.0.1:5000
 ```
 
-These macOS/Linux browser commands expect at least one configured raw-history ticker. Run actions are mocked to avoid data fetching and prediction-log writes. Screenshots are saved under `/tmp/qusa-sprint3-*.png`. `CHROME_PATH` may point to an installed Chrome executable instead of installing Chromium.
+These macOS/Linux browser commands expect at least one configured raw-history ticker. Run actions are mocked to avoid data fetching and database writes. Screenshots are saved under `/tmp/qusa-sprint3-*.png`. `CHROME_PATH` may point to an installed Chrome executable instead of installing Chromium.
+
+### Prediction History Migration And Recovery
+
+SQLite is the authoritative local ledger for prediction runs, artifacts, and history. A CSV is supported only as a one-time import source or explicit export. Stop the Flask process before changing or restoring local state.
+
+Preview a legacy CSV import without writing anything:
+
+```bash
+python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv data/predictions/prediction_log.csv --dry-run
+```
+
+Run the import once the row count looks right. Re-running the same source is idempotent because QUSA records the source fingerprint and row ordinal.
+
+```bash
+python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv data/predictions/prediction_log.csv
+python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv data/predictions/history-export.csv --export
+```
+
+For a consistent backup while the app is stopped, use SQLite's backup command rather than copying only the main file during WAL activity:
+
+```bash
+sqlite3 data/predictions/qusa.sqlite3 ".backup data/predictions/qusa-backup.sqlite3"
+```
+
+To roll back this migration, stop Flask, retain the original CSV and the SQLite backup, point `QUSA_DATABASE_PATH` at the backup or remove the new database, then restart. The importer never modifies its source CSV, so a fresh database can be rebuilt from that file. Check the active schema version with `sqlite3 data/predictions/qusa.sqlite3 'SELECT * FROM schema_migrations;'`.
 
 ### Troubleshooting
 
@@ -175,7 +200,7 @@ python scripts/model_prediction.py -ticker UPRO --fetch
 
 **Output**:
 - Prediction direction (UP/DOWN) and confidence level.
-- Historical log entry in `data/predictions/prediction_log.csv`.
+- Durable local run and prediction record in `data/predictions/qusa.sqlite3` by default.
 
 ### Dashboard Email Notifications
 
