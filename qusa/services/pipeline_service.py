@@ -3,6 +3,8 @@ from pathlib import Path
 
 from qusa.data.loader import DataLoader
 from qusa.features.pipeline import FeaturePipeline
+from qusa.storage.artifacts import atomic_write_csv
+from qusa.storage.locks import ticker_lock
 from qusa.utils.config import load_config
 from qusa.utils.formatting import format_box, format_header
 
@@ -53,13 +55,28 @@ def log_mc_feature_validation(fe_pipeline, processed_data, logger):
     mc_calculator.print_feature_summary(processed_data)
 
 
-def run_feature_pipeline(ticker, fetch_latest=False, config_path=None, logger=None):
+def run_feature_pipeline(
+    ticker, fetch_latest=False, config_path=None, logger=None, _lock_held=False
+):
     """
     Run feature engineering for one ticker and return structured metadata.
     """
 
     ticker = ticker.upper()
     config_path = Path(config_path or DEFAULT_CONFIG_PATH)
+
+    if not _lock_held:
+        lock_config = load_config(config_path)
+        lock_root = Path(lock_config["data"]["paths"]["raw_data_dir"]).expanduser()
+        timeout = lock_config.get("coordination", {}).get("lock_timeout_seconds", 5.0)
+        with ticker_lock(lock_root, ticker, timeout_seconds=float(timeout)):
+            return run_feature_pipeline(
+                ticker,
+                fetch_latest=fetch_latest,
+                config_path=config_path,
+                logger=logger,
+                _lock_held=True,
+            )
 
     if logger:
         for line in format_header("Starting Nocturne Feature Pipeline").split("\n"):
@@ -113,7 +130,7 @@ def run_feature_pipeline(ticker, fetch_latest=False, config_path=None, logger=No
     os.makedirs(processed_dir, exist_ok=True)
 
     output_path = Path(processed_dir) / f"{ticker}_processed.csv"
-    processed_data.to_csv(output_path, index=False)
+    atomic_write_csv(processed_data, output_path)
 
     if logger:
         logger.info(f"✓ Processed data saved to {output_path}")

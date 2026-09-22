@@ -79,23 +79,13 @@ On PowerShell use `Copy-Item .env.example .env`. Do not overwrite an existing `.
 `QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are optional defaults for dashboard email notifications. You can also enter the SMTP username and password directly in the dashboard for the current Streamlit session. For Gmail, use an app password rather than your normal account password.
 
 4. **Configure the project**:
-The checked-in `qusa/utils/config.yaml` contains `~/Projects/qusa/...` paths. Before running services in a new clone, replace those paths with your checkout's absolute paths, or use the following relative values while always running from the repository root. Update these keys in the existing file, preserving all other settings:
+Keep `qusa/utils/config.yaml` unchanged unless you intentionally maintain a local override. Set `QUSA_DATA_ROOT` to put raw, processed, figure, prediction, and report files beneath one portable directory:
 
-```yaml
-data:
-  paths:
-    raw_data_dir: data/raw
-    processed_data_dir: data/processed
-    figures_dir: data/figures
-    predictions_dir: data/predictions
-    reports_dir: data/reports
-model:
-  output:
-    model_output_path: saved_models
-prediction:
-  log_file: logs/predictions.log
-  csv_log: data/predictions/prediction_log.csv
+```bash
+export QUSA_DATA_ROOT="$PWD/data"
 ```
+
+Set `QUSA_CONFIG_PATH` to use a separate YAML file. Exported values take precedence; neither setting rewrites an existing configuration file.
 
 Set `reporting.enabled: false` unless you have a local Ollama server and the model specified in `reporting.llm.model`. AI reporting is optional; it is not required to serve the Flask dashboard.
 

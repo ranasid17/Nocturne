@@ -116,6 +116,21 @@ def test_service_errors_do_not_expose_sensitive_values(
     assert secret not in caplog.text
 
 
+@pytest.mark.parametrize("endpoint, service_name", [
+    ("pipeline", "run_feature_pipeline"),
+    ("predictions", "make_latest_prediction"),
+])
+def test_ticker_busy_is_reported_as_a_conflict(client, monkeypatch, endpoint, service_name):
+    import qusa.services as services
+    from qusa.storage.locks import TickerBusyError
+
+    monkeypatch.setattr(services, service_name, Mock(side_effect=TickerBusyError("UPRO is busy")))
+    response = client.post(f"/api/{endpoint}/run", json={"ticker": "UPRO"})
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "ticker_busy"
+
+
 def test_history_filter_order_limit_and_nulls(client, monkeypatch, tmp_path):
     path = tmp_path / "predictions.csv"
     rows = [{"ticker": "UPRO", "timestamp": str(stamp), "probability_up": None}
