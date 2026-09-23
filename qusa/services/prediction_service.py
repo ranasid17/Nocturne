@@ -28,14 +28,14 @@ def make_latest_prediction(
     logger=None,
     repository=None,
     _lock_held=False,
+    _config=None,
 ):
     """
     Make and optionally log the latest prediction for one ticker.
     """
 
     ticker = ticker.upper()
-    config_path = Path(config_path or DEFAULT_CONFIG_PATH)
-    config = load_config(config_path)
+    config = _config if _config is not None else load_config(config_path)
 
     if not _lock_held:
         lock_root = Path(config["data"]["paths"]["raw_data_dir"]).expanduser()
@@ -49,6 +49,7 @@ def make_latest_prediction(
                 logger=logger,
                 repository=repository,
                 _lock_held=True,
+                _config=config,
             )
 
     repository = repository or RunRepository.from_config(config)
@@ -65,7 +66,7 @@ def make_latest_prediction(
         if fetch_latest:
             if logger:
                 logger.info(f"--fetch enabled: preparing data for {ticker}...")
-            run_feature_pipeline(ticker, fetch_latest=True, config_path=config_path, logger=logger, _lock_held=True)
+            run_feature_pipeline(ticker, fetch_latest=True, config_path=config_path, logger=logger, _lock_held=True, _config=config)
         if not processed_data_path.exists():
             raise FileNotFoundError(f"Data not found at {processed_data_path}")
 
@@ -87,10 +88,9 @@ def make_latest_prediction(
         repository.record_model(prediction.get("model_id") or model_path.name, model_path)
         repository.record_artifact(run["id"], "model", model_path)
         repository.record_artifact(run["id"], "processed_data", processed_data_path)
-        repository.record_prediction(run["id"], log_entry)
-        repository.transition_run(run["id"], "succeeded")
         if logger:
             logger.info(f"Prediction for {ticker}: {prediction.get('direction')} ({prediction.get('confidence')} Confidence)")
+        repository.complete_prediction(run["id"], log_entry)
         return {"success": True, "ticker": ticker, "prediction": prediction, "log_entry": log_entry,
                 "run_id": run["id"], "model_path": str(model_path), "processed_data_path": str(processed_data_path),
                 "volatility_filter": vol_filter, "readiness": readiness}

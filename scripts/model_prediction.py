@@ -52,7 +52,7 @@ def main():
     tickers = [t.upper() for t in args.tickers]
 
     try:
-        config_path = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
+        config_path = None
         config = load_config(str(config_path))
 
         log_file = config.get("prediction", {}).get("log_file", "logs/predictions.log")

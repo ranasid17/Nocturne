@@ -46,7 +46,7 @@ def main():
         "FE_pipeline",
         log_file=str(PROJECT_ROOT / "logs" / "fe_pipeline.log"),
     )
-    config_path = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
+    config_path = None
 
     try:
         run_feature_pipeline(

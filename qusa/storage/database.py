@@ -13,9 +13,9 @@ def database_path(config, environ=None):
     """Resolve the locally configured database path without creating it."""
 
     environment = environ if environ is not None else os.environ
-    configured = environment.get("QUSA_DATABASE_PATH")
+    configured = config.get("storage", {}).get("database_path")
     if not configured:
-        configured = config.get("storage", {}).get("database_path")
+        configured = environment.get("QUSA_DATABASE_PATH")
     if not configured:
         configured = Path(config["data"]["paths"]["predictions_dir"]) / "qusa.sqlite3"
     return Path(configured).expanduser()

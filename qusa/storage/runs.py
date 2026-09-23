@@ -9,6 +9,7 @@ import sqlite3
 from uuid import uuid4
 
 from .database import connect_database, database_path, initialize_database
+from qusa.utils.errors import safe_error as _safe_error
 
 
 RUN_TRANSITIONS = {
@@ -38,10 +39,6 @@ def _json(value):
 
 def _parse(value):
     return json.loads(value or "{}")
-
-
-def _safe_error(error):
-    return str(error).replace("\n", " ")[:500]
 
 
 class RunRepository:
@@ -112,7 +109,7 @@ class RunRepository:
         with connect_database(self.path) as connection:
             connection.execute(
                 "INSERT INTO model_metadata(id, path, metadata_json, created_at) VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET path = excluded.path, metadata_json = excluded.metadata_json",
+                "ON CONFLICT(id) DO NOTHING",
                 (str(model_id), str(path), _json(metadata), _now()),
             )
 
@@ -124,9 +121,36 @@ class RunRepository:
             )
 
     def record_prediction(self, run_id, log_entry):
-        readiness = log_entry.get("readiness") or {}
         with connect_database(self.path) as connection:
-            connection.execute(
+            self._insert_prediction(connection, run_id, log_entry)
+
+    def complete_prediction(self, run_id, log_entry, owner_id=None):
+        """Publish the prediction and successful run state in one transaction."""
+        with connect_database(self.path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute("SELECT status, owner_id FROM runs WHERE id = ?", (run_id,)).fetchone()
+                if row is None or row["status"] != "running":
+                    raise RunStateError("Only running predictions can be completed.")
+                if row["owner_id"] and row["owner_id"] != owner_id:
+                    raise RunStateError("Run ownership does not match.")
+                self._insert_prediction(connection, run_id, log_entry)
+                connection.execute(
+                    "UPDATE runs SET status = 'succeeded', completed_at = ? WHERE id = ?",
+                    (_now(), run_id),
+                )
+                connection.execute("COMMIT")
+            except Exception:
+                connection.execute("ROLLBACK")
+                raise
+
+    def update_metadata(self, run_id, metadata):
+        with connect_database(self.path) as connection:
+            connection.execute("UPDATE runs SET metadata_json = ? WHERE id = ?", (_json(metadata), run_id))
+
+    def _insert_prediction(self, connection, run_id, log_entry):
+        readiness = log_entry.get("readiness") or {}
+        connection.execute(
                 "INSERT INTO predictions(id, run_id, ticker, occurred_at, feature_date, direction, "
                 "probability_up, confidence, atr_pct, volatility_filter_triggered, volatility_state, "
                 "volatility_threshold, readiness_status, readiness_json, model_id) "
@@ -135,7 +159,7 @@ class RunRepository:
                     str(uuid4()), run_id, str(log_entry.get("ticker", "")).upper(),
                     str(log_entry.get("timestamp", _now())), str(log_entry.get("date")) if log_entry.get("date") is not None else None,
                     log_entry.get("direction"), _number(log_entry.get("probability_up")) if log_entry.get("probability_up") is not None else None, log_entry.get("confidence"),
-                    _number(log_entry.get("atr_pct")) if log_entry.get("atr_pct") is not None else None, int(bool(log_entry.get("volatility_filter_triggered"))),
+                    _number(log_entry.get("atr_pct")) if log_entry.get("atr_pct") is not None else None, _truthy(log_entry.get("volatility_filter_triggered")),
                     log_entry.get("volatility_state"), _number(log_entry.get("volatility_threshold")) if log_entry.get("volatility_threshold") is not None else None,
                     log_entry.get("readiness_status"), _json(readiness), log_entry.get("model_id"),
                 ),
@@ -150,10 +174,12 @@ class RunRepository:
         result = dict(row)
         result["metadata"] = _parse(result.pop("metadata_json"))
         result["artifacts"] = [dict(item) for item in artifacts]
+        if result["error_message"]:
+            result["error_message"] = _safe_error(result["error_message"])
         return result
 
     def list_predictions(self, ticker=None, limit=50, offset=0):
-        clauses, values = [], []
+        clauses, values = ["r.status = 'succeeded'"], []
         if ticker:
             clauses.append("p.ticker = ?")
             values.append(ticker.upper())
@@ -173,8 +199,11 @@ class RunRepository:
     def _prediction_row(self, row):
         result = dict(row)
         result["timestamp"] = result.pop("occurred_at")
+        result["date"] = result["feature_date"]
         result["readiness"] = _parse(result.pop("readiness_json"))
-        result["volatility_filter_triggered"] = bool(result["volatility_filter_triggered"])
+        value = result["volatility_filter_triggered"]
+        result["volatility_filter_triggered"] = bool(value) if value is not None else None
+        result["volatility_state"] = result["volatility_state"] or "unknown"
         result.pop("id", None)
         return result
 
@@ -205,7 +234,7 @@ class RunRepository:
                     connection.execute(
                         "INSERT INTO predictions(id, run_id, ticker, occurred_at, feature_date, direction, probability_up, confidence, atr_pct, volatility_filter_triggered, volatility_state, volatility_threshold, readiness_status, readiness_json) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')",
-                        (str(uuid4()), run_id, ticker, timestamp, row.get("date"), row.get("direction"),
+                        (str(uuid4()), run_id, ticker, timestamp, row.get("date") or row.get("feature_date"), row.get("direction"),
                          _number(row.get("probability_up")), row.get("confidence"), _number(row.get("atr_pct")),
                          _truthy(row.get("volatility_filter_triggered")), row.get("volatility_state"),
                          _number(row.get("volatility_threshold")), row.get("readiness_status")),
@@ -288,4 +317,6 @@ def _number(value):
 
 
 def _truthy(value):
+    if value is None or str(value).strip().lower() not in {"1", "true", "yes", "0", "false", "no"}:
+        return None
     return int(str(value).strip().lower() in {"1", "true", "yes"})

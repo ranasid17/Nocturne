@@ -13,7 +13,7 @@ def load_env(env_path=".env"):
     load_dotenv(env_path, override=False)
 
 
-def load_config(config_path="config.yaml"):
+def load_config(config_path=None):
     """
     Load configuration from a YAML file.
 
