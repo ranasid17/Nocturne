@@ -17,10 +17,7 @@ joblib
 ollama
 
 # visualization & UI
-streamlit
-plotly
 bottleneck>=1.3.6
-watchdog
 flask>=2.3
 python-dotenv>=1.0  # Load .env when starting the Flask CLI
 pandas_market_calendars>=5.0,<5.2  # Python 3.9-compatible NYSE session calendar

@@ -19,7 +19,7 @@ signals beyond traditional technical analysis.
 
 ## Roadmap
 
-The product roadmap for the small-team signal app is available in [docs/index.md](docs/index.md). The static review site should be published with GitHub Pages from the `main` branch `/docs` folder.
+The current operations guide is available in [docs/operations.md](docs/operations.md). The older product roadmap in [docs/index.md](docs/index.md) is archived planning material. The static review site is published from the `main` branch `/docs` folder.
 
 ## Key Features
 

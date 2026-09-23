@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-research = ["matplotlib", "ollama", "plotly", "streamlit", "watchdog"]
+research = ["matplotlib", "ollama"]
 test = ["pytest", "pytest-cov"]
 
 [tool.setuptools]
