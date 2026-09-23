@@ -21,7 +21,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install .
 
       - name: Compile Python files
         run: python -m compileall -q app.py web_app qusa scripts
@@ -85,3 +84,13 @@ jobs:
           name: installed-app-screenshots
           path: ${{ runner.temp }}/nocturne-screenshots/
           if-no-files-found: ignore
+
+      - name: Verify research extra from the wheel
+        run: |
+          for wheel_path in dist/nocturne_qusa-*.whl; do
+            "$RUNNER_TEMP/nocturne-venv/bin/python" -m pip install "${wheel_path}[research]"
+          done
+          "$RUNNER_TEMP/nocturne-venv/bin/python" -m pip check
+          mkdir -p "$RUNNER_TEMP/nocturne-research"
+          cd "$RUNNER_TEMP/nocturne-research"
+          "$RUNNER_TEMP/nocturne-venv/bin/python" "$GITHUB_WORKSPACE/tests/installed_workflow.py" "$PWD" --research

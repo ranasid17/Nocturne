@@ -8,6 +8,7 @@ import logging
 import joblib
 import os
 import pandas as pd
+from qusa.model.probability import probability_of_up
 import uuid
 
 from datetime import datetime
@@ -240,7 +241,7 @@ class OvernightDirectionModel:
 
         # predict labels for test set and store probabilities
         y_pred = self.model.predict(X_test)
-        y_prob = _probability_of_up(self.model, X_test)
+        y_prob = probability_of_up(self.model, X_test)
 
         # calculate performance metrics and store as attribute
         accuracy = accuracy_score(y_test, y_pred)
@@ -362,13 +363,3 @@ def train_model(data_path, save_path, config=None):
     logger.info("=" * 80)
 
     return model
-
-
-def _probability_of_up(model, features):
-    """Return the probability for class 1 even for degenerate legacy bundles."""
-
-    probabilities = model.predict_proba(features)
-    classes = list(getattr(model, "classes_", []))
-    if 1 not in classes:
-        return pd.Series(0.0, index=features.index).to_numpy()
-    return probabilities[:, classes.index(1)]

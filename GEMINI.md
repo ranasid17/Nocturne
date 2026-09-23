@@ -1,95 +1,32 @@
-# GEMINI.md - Nocturne (Quantitative Overnight Regime Analysis)
+# Nocturne Contributor Guide
 
-## Project Overview
-Nocturne is a Python-based quantitative analysis framework designed for feature engineering, signal identification, and pattern discovery in US equity markets. Its primary focus is on overnight price movements (close-to-open gaps), technical indicators, and unsupervised clustering to identify trading regimes.
+Nocturne is a Python 3.9+ local Flask application with explicit CLI research workflows. [README.md](README.md) is the user setup guide; [docs/operations.md](docs/operations.md) covers backups and restore. The historical roadmap in [docs/index.md](docs/index.md) is archived.
 
-### Main Technologies
-- **Language**: Python 3.8+
-- **Data Manipulation**: `pandas`, `numpy`
-- **Machine Learning**: `scikit-learn` (Decision Trees, K-Means, DBSCAN)
-- **Visualization**: `matplotlib`
-- **Data Fetching**: `requests` (Polygon.io API)
-- **Reporting**: `ollama` (Local LLM integration for AI-powered reports)
-- **Serialization**: `joblib` (Model persistence)
+## Install And Check
 
-### Architecture
-The project follows a sequential data pipeline:
-1.  **Data Fetching**: Retrieval of OHLCV data from Polygon.io.
-2.  **Feature Engineering**: Calculation of technical indicators (RSI, ATR), overnight gaps, and calendar features. Includes an optional Monte Carlo simulation component.
-3.  **Clustering**: Unsupervised learning to group trading days into regimes.
-4.  **Modeling**: Supervised learning (Decision Trees) to predict overnight price direction.
-5.  **Evaluation & Backtesting**: Rigorous testing of model performance and strategy simulation.
-6.  **Inference**: Live prediction capabilities for recent trading days.
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pytest -q --cov=qusa --cov-fail-under=40
+flask --app app run
+```
 
----
+`requirements.txt` installs the package with research and test extras. Runtime dependencies are declared in `pyproject.toml`. The base package needs no Matplotlib or Ollama SDK. It starts with no provider credentials; fetching data requires `POLYGON_API_KEY`.
 
-## Building and Running
+## Execution Paths
 
-### Prerequisites
-- **API Key**: A Polygon.io API key is required, stored in a `.env` file as `POLYGON_API_KEY`.
-- **Environment**: Python 3.8+ environment with dependencies installed.
-- **Local LLM (Optional)**: [Ollama](https://ollama.ai) must be running with the model specified in `config.yaml` (default: `gemma3:4b`) to generate AI reports.
+- `web_app/api.py` validates Flask requests and calls importable services in `qusa/services/`.
+- `qusa/cli.py` provides the installed `nocturne` command. `scripts/run_model_pipeline.py` and `scripts/run_clustering.py` are thin legacy wrappers preserving their flags and exit codes.
+- `qusa/model/` owns numerical training, evaluation, backtesting, and prediction. Keep probability-class interpretation consistent through `qusa/model/probability.py`.
+- `qusa/storage/runs.py` owns run transactions and successful-only prediction reads. `qusa/storage/history_csv.py` owns CSV parsing and writing for legacy migration.
+- `qusa/services/research_outputs.py` and `clustering_outputs.py` save run-owned artifacts; plotting is optional and noninteractive.
+- `qusa/utils/settings.py` selects explicit YAML, `QUSA_CONFIG_PATH`, or packaged defaults, in that order. `QUSA_DATA_ROOT` and `QUSA_DATABASE_PATH` override local storage paths.
 
-### Key Commands
+Run `nocturne --help` for supported commands. For a local sequence, fetch data with `python scripts/fetch_data.py -ticker UPRO --days 504`, then run `nocturne features UPRO`, `nocturne research UPRO`, and `nocturne predict UPRO`. No Flask page load performs research or sends notifications. Reports use the local Ollama HTTP endpoint only when enabled in configuration.
 
-- **Install Dependencies**:
-  ```bash
-  pip install -r requirements.txt
-  ```
+## Data And Tests
 
-- **Fetch Latest Data**:
-  ```bash
-  python scripts/fetch_data.py -ticker <TICKER> --days 1
-  ```
+Raw history is `data/raw/{TICKER}_history.csv`, processed features are `data/processed/{TICKER}_processed.csv`, and the current model is `saved_models/{ticker_lowercase}_model.pkl` under default paths. The SQLite ledger is normally `data/predictions/qusa.sqlite3`. Do not commit local data, model bundles, logs, `.env`, or database files.
 
-- **Run Feature Engineering Pipeline**:
-  ```bash
-  python scripts/run_FE_pipeline.py -ticker <TICKER>
-  ```
-
-- **Run Clustering Analysis**:
-  ```bash
-  python scripts/run_clustering.py -ticker <TICKER>
-  ```
-
-- **Run Full Model Pipeline (Train/Eval/Backtest)**:
-  ```bash
-  python scripts/run_model_pipeline.py -ticker <TICKER1> <TICKER2>
-  ```
-
-- **Run Live Prediction**:
-  ```bash
-  python scripts/model_prediction.py -ticker <TICKER>
-  ```
-
-- **Run Tests**:
-  ```bash
-  pytest
-  ```
-
----
-
-## Development Conventions
-
-### Configuration
-- All project settings (data paths, hyperparameters, reporting options) are centralized in `qusa/utils/config.yaml`.
-- Use the `load_config` utility in `qusa.utils.config` to access settings.
-
-### Directory Structure & Data Management
-- `data/raw/`: Original CSV files (format: `{TICKER}_{START}_{END}.csv`).
-- `data/processed/`: Feature-engineered and clustered data.
-- `data/figures/`: Plots, visualizations, and backtest results.
-- `data/reports/`: AI-generated analysis reports (categorized by type).
-- `saved_models/`: Serialized model bundles (`.pkl`).
-- `logs/`: Application and experiment logs.
-
-### Coding Style
-- **Path Management**: Use `pathlib.Path` for all file system operations. The codebase typically resolves `PROJECT_ROOT` relative to the script location.
-- **Logging**: Use the centralized logging setup in `qusa.utils.logger`.
-- **Error Handling**: Use the logger to capture and report errors, especially in pipeline orchestration.
-- **Type Safety**: While not strictly enforced with static types, internal data flows rely heavily on `pandas.DataFrame` structures with expected columns (e.g., `date`, `open`, `high`, `low`, `close`, `volume`).
-
-### Testing
-- Tests are located in the `tests/` directory.
-- `test_smoke.py` contains integration and unit tests for key components like the config loader, feature pipeline, and data fetcher.
-- Mocks and patches (using `unittest.mock`) are preferred for external dependencies like APIs or LLM calls.
+`tests/test_mvp_reliability.py` and `tests/test_sprint8_parity.py` cover service behavior, run state, artifacts, and CLI parity with synthetic data. The installed-wheel and browser checks are in `tests/installed_workflow.py` and `tests/web_installed.cjs`. Keep external Polygon, SMTP, and LLM boundaries mocked in tests; preserve scientific calculations and result schemas when refactoring.

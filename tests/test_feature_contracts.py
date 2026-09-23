@@ -9,7 +9,7 @@ from qusa.features.pipeline import FeaturePipeline
 from qusa.model.predict import LivePredictor
 from qusa.model.train import get_safe_features
 from qusa.services.pipeline_service import _build_feature_pipeline
-from scripts.run_model_pipeline import _build_model_config
+from qusa.services.research_service import _model_config
 
 
 def test_monte_carlo_daily_log_return_distribution_and_zero_volatility():
@@ -90,11 +90,11 @@ def test_feature_service_forwards_all_custom_feature_windows():
 
 def test_training_config_forwards_tuning_and_rejects_malformed_grids():
     config = {"model": {"parameters": {"tuning": {"enabled": True, "param_grid": {"max_depth": [3, 5]}}}}}
-    assert _build_model_config(config)["tuning"]["param_grid"] == {"max_depth": [3, 5]}
+    assert _model_config(config)["tuning"]["param_grid"] == {"max_depth": [3, 5]}
 
     malformed = {"model": {"parameters": {"tuning": {"enabled": True, "param_grid": {"bad": [1]}}}}}
     with pytest.raises(ValueError, match="Unsupported"):
-        _build_model_config(malformed)
+        _model_config(malformed)
 
 
 def _write_predictor_bundle(tmp_path):
