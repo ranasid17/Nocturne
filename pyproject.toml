@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-research = ["matplotlib", "ollama"]
+research = ["matplotlib"]
 test = ["pytest", "pytest-cov"]
 
 [project.scripts]

@@ -1,27 +1,3 @@
-# Nocturne/requirements.txt
-
-# Data retrieval
-requests
-
-# feature engineering 
-numpy 
-pandas 
-pyyaml 
-
-# clustering
-matplotlib
-scikit-learn
-
-# modeling
-joblib
-ollama
-
-# visualization & UI
-bottleneck>=1.3.6
-flask>=2.3
-python-dotenv>=1.0  # Load .env when starting the Flask CLI
-pandas_market_calendars>=5.0,<5.2  # Python 3.9-compatible NYSE session calendar
-
-# testing
-pytest
-pytest-cov
+# Editable development install with plotting and test dependencies.
+# Runtime requirements are declared only in pyproject.toml.
+-e .[research,test]

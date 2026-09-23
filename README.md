@@ -1,288 +1,84 @@
-# Nocturne: Quantitative Overnight Regime Analysis & Alpha Discovery
+# Nocturne
 
-A Python-based quantitative analysis framework for feature engineering, signal identification, and pattern discovery 
-in US equity markets. **Nocturne** focuses on overnight price movements (close-to-open gaps), technical indicator analysis, 
-and unsupervised clustering to identify trading regimes.
+Nocturne is a local research and prediction app for overnight US equity moves. Flask serves feature generation, predictions, and saved history; explicit CLI commands handle data fetching, training, evaluation, backtesting, and clustering. It is for research, not financial advice.
 
-## Overview
+## Install
 
-Nocturne provides a comprehensive toolkit for analyzing stock market data through:
+Python 3.9 or newer is required. From a clone:
 
-- **Feature Engineering**: Calculate technical indicators (RSI, ATR, volume metrics) and calendar-based features
-- **Overnight Analysis**: Identify and analyze overnight price gaps and abnormal movements
-- **Clustering Analysis**: Discover market regimes and trading patterns using K-Means and DBSCAN
-- **Predictive Modeling**: Train decision tree models to predict overnight price direction
-- **Backtesting**: Evaluate trading strategies with realistic transaction costs
-
-The framework is designed for researchers and quantitative analysts who want to explore pattern-based trading 
-signals beyond traditional technical analysis.
-
-## Roadmap
-
-The current operations guide is available in [docs/operations.md](docs/operations.md). The older product roadmap in [docs/index.md](docs/index.md) is archived planning material. The static review site is published from the `main` branch `/docs` folder.
-
-## Key Features
-
-### Feature Engineering
-- **Technical Indicators**: RSI, ATR, Volume ratios, 52-week high/low proximity, and momentum metrics.
-- **Overnight Calculations**: Close-to-open gaps, abnormal movement z-scores, and gap pattern statistics.
-- **Calendar Features**: Day of week, month of year, and month start/end effects.
-
-### Unified History & Deconfliction
-- **Consolidated Storage**: Maintains a single `{TICKER}_history.csv` source of truth for each ticker.
-- **Automated Deconfliction**: Automatically merges new fetches with existing data, removes duplicates, and archives fragmented files.
-- **Standardized CLI**: Unified `-ticker` flag across all scripts for a consistent user experience.
-
-### Clustering Analysis
-- Unsupervised learning (K-Means/DBSCAN) to group trading days into interpretable regimes.
-- PCA-based visualization and feature importance ranking by cluster separation.
-
-### Machine Learning & Backtesting
-- Decision tree classifiers for overnight direction prediction with high-confidence filtering.
-- Comprehensive backtesting engine with realistic costs and Sharpe/Alpha/Drawdown metrics.
-- **AI-Powered Reporting**: Automated report generation using local LLMs (via Ollama).
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.9+ (CI uses Python 3.11)
-- Polygon.io API key for fetching and feature generation; the dashboard and health checks can start without it
-- Ollama (optional, for AI-powered reports)
-
-### Installation
-
-1. **Clone the repository**:
-```bash
-git clone https://github.com/ranasid17/Nocturne.git
-cd Nocturne
-```
-
-2. **Create an isolated environment and install dependencies** (macOS/Linux):
-```bash
+```sh
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
 python -m pip install .
-```
-
-Install `python -m pip install '.[research,test]'` for plotting and the test suite. Prediction and the Flask dashboard do not require these extras.
-
-On Windows PowerShell, create it with `py -3 -m venv .venv` and activate with `.venv\Scripts\Activate.ps1`, then run the same pip commands. Run all commands below from the repository root with this environment active.
-
-3. **Set up environment variables**:
-For a new checkout, create the local file from the placeholders:
-```bash
-cp .env.example .env
-```
-
-On PowerShell use `Copy-Item .env.example .env`. Do not overwrite an existing `.env`. Edit the new file to set `POLYGON_API_KEY`. Flask loads it at startup; CLI workflows load it when reading configuration. Existing exported environment variables take precedence. `.env` is ignored by Git; `.env.example` contains no credentials.
-
-`QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are optional credentials for the explicit notification worker. Opening the Flask dashboard never sends email.
-
-4. **Configure the project**:
-Configuration precedence is an explicit CLI/service path, then `QUSA_CONFIG_PATH`, then packaged `qusa/utils/defaults.yaml`. Packaged relative paths use your working directory; custom YAML paths use that file's directory. Nothing writes into site-packages. Your existing `qusa/utils/config.yaml` is preserved but is only used when explicitly selected. Set `QUSA_DATA_ROOT` to put raw, processed, figure, prediction, and report files beneath one portable directory:
-
-```bash
-export QUSA_DATA_ROOT="$PWD/data"
-```
-
-Set `QUSA_CONFIG_PATH` to use a separate YAML file. Set `QUSA_DATABASE_PATH` to place the local SQLite run history elsewhere; by default it is `data/predictions/qusa.sqlite3` (or the equivalent beneath `QUSA_DATA_ROOT`). Exported values take precedence; neither setting rewrites an existing configuration file.
-
-The packaged defaults disable email, LLM reporting, and plots. To keep an existing local setup, export `QUSA_CONFIG_PATH="$PWD/qusa/utils/config.yaml"`. Enable reports only with an available Ollama server; enable `backtest.save_plots` or `clustering.save_plots` after installing the research extra.
-
-The installed CLI works outside the checkout: `nocturne --help`, `nocturne features UPRO`, `nocturne research UPRO`, `nocturne predict UPRO`, and `nocturne cluster UPRO`. Each accepts `--config /path/to/config.yaml`; features/predict accept `--fetch`.
-
-### Start the Flask Dashboard
-
-```bash
 flask --app app run
 ```
 
-Open <http://127.0.0.1:5000>. If port 5000 is occupied, use `flask --app app run --port 5050` and open <http://127.0.0.1:5050>. Stop the server with Ctrl+C. The equivalent interpreter-specific command is `python -m flask --app app run`.
+Open <http://127.0.0.1:5000>. The server binds to loopback by default and has no authentication. On Windows, create the environment with `py -3 -m venv .venv` and activate `.venv\Scripts\Activate.ps1`. Install `python -m pip install '.[research,test]'` for Matplotlib plots and tests, or `python -m pip install -r requirements.txt` for an editable development install. Runtime dependencies are declared in [pyproject.toml](pyproject.toml).
 
-The page supports ticker entry, feature generation, predictions with an optional maximum ATR percentage, and the latest 50 logged predictions. Requests run synchronously, so feature generation may take time. This is a local development app without authentication; keep the default loopback binding. GitHub hosts the source and PRs, not the Flask process. The separate GitHub Pages roadmap site cannot run this Python backend.
-
-The supported Flask workflow is prediction and feature preparation. Training, evaluation, backtesting, clustering, plotting, and optional Ollama reporting remain explicit CLI research workflows; they are not started by opening or refreshing the dashboard.
-
-A fresh clone has no market data or trained models because generated artifacts are ignored. The page still opens with an empty state. To run predictions, follow the CLI workflow below or supply your own compatible data and trained model:
-
-- Ticker discovery reads `data/raw/{TICKER}_history.csv`.
-- Feature generation writes `data/processed/{TICKER}_processed.csv`. Local history needs no Polygon API key; fetching new data does.
-- Prediction requires `saved_models/{ticker_lowercase}_model.pkl` and processed data. Training is performed through the CLI, not the Flask page.
-- Prediction runs and history are stored in the local SQLite database. The legacy CSV setting is no longer written during normal operation.
-
-Paths above assume the relative configuration shown earlier. The **Fetch latest data** option needs a valid Polygon API key and network access. Missing models/data produce an error in the page rather than creating a model automatically.
-
-### Verify the Setup
-
-```bash
-python -m pip check
-python -m pytest -q
-python -m compileall -q app.py web_app qusa scripts
-```
-
-With the server running, `curl http://127.0.0.1:5000/health` and `curl http://127.0.0.1:5000/api/health` should return `{"status":"healthy"}`. `/api/tickers` returns a `tickers` list; `/api/predictions/history` returns a `history` list. Both lists may be empty on a new checkout. Tests include real synthetic training/inference, Flask routes, SQLite restart/failure checks, and run-scoped research outputs without live external services. See [Sprint 7 verification](docs/sprint7-verification.md) for the clean-wheel and browser procedure.
-
-Optional browser checks use Node.js and Playwright, not application runtime dependencies:
-
-```bash
-npm install --prefix /tmp/nocturne-browser-tools playwright
-/tmp/nocturne-browser-tools/node_modules/.bin/playwright install chromium
-NODE_PATH=/tmp/nocturne-browser-tools/node_modules node tests/web_dashboard.cjs http://127.0.0.1:5000
-```
-
-These macOS/Linux browser commands expect at least one configured raw-history ticker. Run actions are mocked to avoid data fetching and database writes. Screenshots are saved under `/tmp/qusa-sprint3-*.png`. `CHROME_PATH` may point to an installed Chrome executable instead of installing Chromium.
-
-### Prediction History Migration And Recovery
-
-SQLite is the authoritative local ledger for prediction runs, artifacts, and history. A CSV is supported only as a one-time import source or explicit export. Stop the Flask process before changing or restoring local state.
-
-Preview a legacy CSV import without writing anything:
-
-```bash
-python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv data/predictions/prediction_log.csv --dry-run
-```
-
-Run the import once the row count looks right. Re-running the same source is idempotent because QUSA records the source fingerprint and row ordinal.
-
-```bash
-python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv data/predictions/prediction_log.csv
-python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv data/predictions/history-export.csv --export
-```
-
-For a consistent backup while the app is stopped, use SQLite's backup command rather than copying only the main file during WAL activity:
-
-```bash
-sqlite3 data/predictions/qusa.sqlite3 ".backup data/predictions/qusa-backup.sqlite3"
-```
-
-To roll back this migration, stop Flask, retain the original CSV and the SQLite backup, point `QUSA_DATABASE_PATH` at the backup or remove the new database, then restart. The importer never modifies its source CSV, so a fresh database can be rebuilt from that file. Check the active schema version with `sqlite3 data/predictions/qusa.sqlite3 'SELECT * FROM schema_migrations;'`.
-
-### Troubleshooting
-
-- An import error mentioning Flask, Jinja2, or `escape` usually indicates an old global Flask installation. Activate `.venv`, reinstall `requirements.txt`, and launch with `python -m flask --app app run`.
-- Empty tickers or missing artifacts: verify every configured path and complete fetch, feature generation, and training below. Model filenames use lowercase tickers.
-- `POLYGON_API_KEY ... is required`: fill in `.env` and restart Flask, or export the key before launching the CLI.
-- Ollama connection/model errors during training reports: configure the local model or set `reporting.enabled: false`.
-
-### Review Milestones
-
-The conversion is delivered in four PR-sized commits: service extraction and app skeleton (Sprint 1), API routes (Sprint 2), templates and browser interactions (Sprint 3), and deployment/docs verification (Sprint 4). See [the execution plan](flask_conversion_execution_plan.md). Generated data, models, logs, environment files, and caches remain local.
-
-## Recommended Workflow
-
-QUSA follows a standardized CLI pattern. You can use `-ticker` or `--ticker` interchangeably.
-
-### 1. Research & Model Development
-
-Use this workflow to build and evaluate a trading strategy for a ticker.
-
-**Step A: Fetch Historical Data**
-Fetch exactly the amount of history you need. Repeated fetches will be automatically deconflicted.
-```bash
-python scripts/fetch_data.py -ticker UPRO --days 504
-```
-
-**Step B: Generate Features**
-Processes the consolidated history into engineered indicators.
-```bash
-python scripts/run_FE_pipeline.py -ticker UPRO
-```
-
-**Step C: Train & Backtest**
-Trains the model and evaluates performance.
-```bash
-python scripts/run_model_pipeline.py -ticker UPRO
-```
-
-### 2. Live Prediction (One-Step)
-
-Once a model is trained, use this command for live "overnight" prediction tests. The `--fetch` flag automates data retrieval and feature engineering in a single step.
-
-```bash
-python scripts/model_prediction.py -ticker UPRO --fetch
-```
-
-**Output**:
-- Prediction direction (UP/DOWN) and confidence level.
-- Durable local run and prediction record in `data/predictions/qusa.sqlite3` by default.
-
-### Dashboard Email Notifications
-
-The Streamlit dashboard can notify recipients after a successful "Generate New Inference" run. Configure SMTP host defaults in `qusa/utils/config.yaml`, then enter the SMTP username, SMTP password, and one or more comma- or semicolon-separated recipients in the dashboard before running inference. If `QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are set in your environment, the dashboard can use them as defaults instead of requiring credentials in the UI.
-
----
-
-## Detailed Usage Guide
-
-### Fetching Data (`scripts/fetch_data.py`)
-- Fetch last $N$ trading days: `python scripts/fetch_data.py -ticker AMZN --days 252`
-- Fetch specific range: `python scripts/fetch_data.py -ticker AMZN --start 2024-01-01 --end 2024-05-01`
-*Fragmented source files are moved to `data/raw/archive/` after consolidation.*
-
-### Clustering Analysis (`scripts/run_clustering.py`)
-Discover market regimes:
-```bash
-python scripts/run_clustering.py -ticker AMZN
-```
-**Output**: Elbow curves, PCA cluster plots, and feature heatmaps in `data/figures/`.
-
-### Full Model Pipeline (`scripts/run_model_pipeline.py`)
-Supports multiple tickers:
-```bash
-python scripts/run_model_pipeline.py -ticker AMZN AAPL MSFT
-```
-**Output**: Trained `.pkl` bundles in `saved_models/` and performance metrics in `data/figures/`.
-
----
-
-## Data Pipeline Architecture
-
-```
-[Polygon.io API]
-    ↓
-(fetch_data.py) → [data/raw/{ticker}_history.csv] ← (Archive fragmented files)
-    ↓
-[Feature Engineering Pipeline]
-    ↓
-[data/processed/{ticker}_processed.csv]
-    ↓
-[Model Training & Backtesting]
-    ↓
-[saved_models/{ticker}_model.pkl] → [AI Reports & Figures]
-```
+The app starts without market data, a provider key, or a model. Local history is enough to generate features. Fetching new data requires `POLYGON_API_KEY`; put it in your environment or a local `.env` made from [the example](.env.example). Generated data, models, logs, and credentials stay outside Git.
 
 ## Configuration
 
-Key settings in `qusa/utils/config.yaml`:
+Config precedence is an explicit `--config` path for the installed CLI, then `QUSA_CONFIG_PATH`, then the packaged [defaults](qusa/utils/defaults.yaml). The packaged paths are relative to the working directory. Paths in a custom YAML file are relative to that file. Existing [local settings](qusa/utils/config.yaml) are used only when selected explicitly; for example:
 
-```yaml
-data:
-  start_date: '2023-12-01'  # Legacy default
-  end_date: '2025-12-01'    # Legacy default
-
-features:
-  rsi_window: 14
-  atr_window: 14
-
-model:
-  parameters:
-    probability_threshold: 0.7  # Cutoff for "High Confidence" predictions
-
-backtest:
-  initial_capital: 10000
-  transaction_cost: 0.05       # % cost per trade (slippage + commission)
+```sh
+export QUSA_CONFIG_PATH="$PWD/qusa/utils/config.yaml"
+export QUSA_DATA_ROOT="$PWD/data"
 ```
 
-## Dependencies
+`QUSA_DATA_ROOT` overrides raw, processed, figure, prediction, and report directories. `QUSA_DATABASE_PATH` overrides the SQLite ledger path; by default it is `data/predictions/qusa.sqlite3`. The packaged defaults disable plotting, email, and AI reporting. To enable plots, install the research extra and set `backtest.save_plots` or `clustering.save_plots`. To enable reports, set `reporting.enabled` and run a local Ollama server with the configured model; the reporter uses its HTTP API through `requests`.
 
-- `pandas`, `numpy` - Data manipulation
-- `scikit-learn` - Machine learning and clustering
-- `matplotlib` - Visualization
-- `requests` - API communication
-- `ollama` - Local LLM integration
+## Use The App
 
-## Disclaimer
+The Flask page lists tickers from local `data/raw/{TICKER}_history.csv` files. Generate features from that history, or select **Fetch latest data** to request a new provider bar. A prediction also needs a trained bundle at `saved_models/{ticker_lowercase}_model.pkl` and `data/processed/{TICKER}_processed.csv`. The page shows generation-time readiness and current data freshness separately. Latest and history show only completed predictions.
 
-This software is for educational and research purposes only. It is not intended as financial advice. Trading stocks involves substantial risk of loss. Past performance does not guarantee future results.
+For a local research workflow:
+
+```sh
+python scripts/fetch_data.py -ticker UPRO --days 504
+nocturne features UPRO
+nocturne research UPRO
+nocturne predict UPRO
+```
+
+The fetch script also accepts `--start YYYY-MM-DD --end YYYY-MM-DD`. The installed CLI accepts `features`, `research`, `predict`, and `cluster`, with one ticker and an optional `--config`; `features` and `predict` also accept `--fetch`. The legacy script flags remain available:
+
+```sh
+python scripts/run_FE_pipeline.py -ticker UPRO
+python scripts/run_model_pipeline.py -ticker UPRO AAPL --volatility 3
+python scripts/run_clustering.py -ticker UPRO
+python scripts/model_prediction.py -ticker UPRO --fetch
+```
+
+Training writes the current model bundle and a run-owned snapshot. Enabled numerical outputs, reports, cluster statistics, and figures have run-owned paths recorded in SQLite. Plots are noninteractive. Optional report failures appear separately from completed numerical phases. Flask does not expose training or email controls; notification delivery is an explicit worker operation.
+
+## Verify
+
+```sh
+python -m pip install '.[research,test]'
+python -m pip check
+python -m pytest -q --cov=qusa --cov-fail-under=40
+python -m compileall -q app.py web_app qusa scripts
+```
+
+`GET /health` and `GET /api/health` return `{"status":"healthy"}`. `/api/tickers` and `/api/predictions/history` may be empty on a fresh install. [Sprint 7 verification](docs/sprint7-verification.md) describes the clean-wheel, synthetic Flask/SQLite, and browser checks. No live provider, SMTP, or Ollama service is needed for that suite.
+
+## History And Backup
+
+SQLite is the source of truth for runs and predictions. The CSV tool imports legacy history idempotently by source fingerprint and can export successful predictions:
+
+```sh
+python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv old-history.csv --dry-run
+python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv old-history.csv
+python scripts/migrate_prediction_history.py --database data/predictions/qusa.sqlite3 --csv history-export.csv --export
+```
+
+Keep the original CSV. See [operations](docs/operations.md) for backup, restore, and rollback steps. The importer preserves unknown legacy risk fields rather than inferring values.
+
+## Documentation
+
+- [Operations](docs/operations.md)
+- [Sprint 7 verification](docs/sprint7-verification.md)
+- [Historical Flask conversion plan](flask_conversion_execution_plan.md) and [archived roadmap](docs/index.md)
+
+GitHub Pages serves static documentation from `docs/`; it does not run the Flask backend. For installation problems, check the active virtual environment, `QUSA_CONFIG_PATH`, and the configured data/model paths before running `flask --app app run`.

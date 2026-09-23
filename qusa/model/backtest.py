@@ -9,6 +9,7 @@ import joblib
 import numpy as np
 import os
 import pandas as pd
+from qusa.model.probability import probability_of_up
 
 from qusa.model.train import prepare_model_features
 
@@ -91,7 +92,7 @@ class ModelBacktester:
 
         # extract features and probabilities for full dataset
         X = prepare_model_features(self.data, self.features)
-        y_prob = _probability_of_up(self.model, X)
+        y_prob = probability_of_up(self.model, X)
 
         # store relevant columns from dataset for backtest
         results = self.data[["date", "close", "overnight_delta"]].copy()
@@ -348,13 +349,3 @@ class ModelBacktester:
         plt.close()
 
         logger.info(f"\n✓ Comprehensive results saved to {save_path}")
-
-
-def _probability_of_up(model, features):
-    """Return class-one probabilities for normal and legacy model bundles."""
-
-    probabilities = model.predict_proba(features)
-    classes = list(getattr(model, "classes_", []))
-    if 1 not in classes:
-        return np.zeros(len(features))
-    return probabilities[:, classes.index(1)]

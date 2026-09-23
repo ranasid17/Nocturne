@@ -1,14 +1,3 @@
-try:
-    import jinja2
-    from markupsafe import Markup, escape
-
-    if not hasattr(jinja2, "escape"):
-        jinja2.escape = escape
-    if not hasattr(jinja2, "Markup"):
-        jinja2.Markup = Markup
-except ImportError:
-    pass
-
 from flask import Flask, jsonify
 
 from web_app.api import api_bp

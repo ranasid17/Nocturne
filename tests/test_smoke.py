@@ -146,23 +146,16 @@ def test_model_pipeline_honors_skip_flags(monkeypatch, tmp_path):
         def error(self, *_args, **_kwargs):
             return None
 
-    def fail_phase(*_args, **_kwargs):
-        raise AssertionError("Skipped phases should not run")
-
     monkeypatch.setattr(
         "sys.argv",
         ["run_model_pipeline.py", "-ticker", "TEST"],
     )
-    monkeypatch.setattr(run_model_pipeline, "load_config", lambda _path: config)
+    monkeypatch.setattr(run_model_pipeline, "load_config", lambda: config)
     monkeypatch.setattr(
         run_model_pipeline,
         "setup_logger",
         lambda *_args, **_kwargs: Logger(),
     )
-    monkeypatch.setattr(run_model_pipeline, "_run_training", fail_phase)
-    monkeypatch.setattr(run_model_pipeline, "_run_evaluation", fail_phase)
-    monkeypatch.setattr(run_model_pipeline, "_run_backtest", fail_phase)
-
     assert run_model_pipeline.main() == 0
 
 

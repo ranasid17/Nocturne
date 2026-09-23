@@ -1,10 +1,7 @@
 """Repository for durable local run, prediction, and notification state."""
 
 from datetime import datetime, timezone
-import csv
-import hashlib
 import json
-from pathlib import Path
 import sqlite3
 from uuid import uuid4
 
@@ -151,19 +148,21 @@ class RunRepository:
     def _insert_prediction(self, connection, run_id, log_entry):
         readiness = log_entry.get("readiness") or {}
         connection.execute(
-                "INSERT INTO predictions(id, run_id, ticker, occurred_at, feature_date, direction, "
-                "probability_up, confidence, atr_pct, volatility_filter_triggered, volatility_state, "
-                "volatility_threshold, readiness_status, readiness_json, model_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    str(uuid4()), run_id, str(log_entry.get("ticker", "")).upper(),
-                    str(log_entry.get("timestamp", _now())), str(log_entry.get("date")) if log_entry.get("date") is not None else None,
-                    log_entry.get("direction"), _number(log_entry.get("probability_up")) if log_entry.get("probability_up") is not None else None, log_entry.get("confidence"),
-                    _number(log_entry.get("atr_pct")) if log_entry.get("atr_pct") is not None else None, _truthy(log_entry.get("volatility_filter_triggered")),
-                    log_entry.get("volatility_state"), _number(log_entry.get("volatility_threshold")) if log_entry.get("volatility_threshold") is not None else None,
-                    log_entry.get("readiness_status"), _json(readiness), log_entry.get("model_id"),
-                ),
-            )
+            "INSERT INTO predictions(id, run_id, ticker, occurred_at, feature_date, direction, "
+            "probability_up, confidence, atr_pct, volatility_filter_triggered, volatility_state, "
+            "volatility_threshold, readiness_status, readiness_json, model_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                str(uuid4()), run_id, str(log_entry.get("ticker", "")).upper(),
+                str(log_entry.get("timestamp", _now())),
+                str(log_entry["date"]) if log_entry.get("date") is not None else None,
+                log_entry.get("direction"), _number(log_entry.get("probability_up")),
+                log_entry.get("confidence"), _number(log_entry.get("atr_pct")),
+                _truthy(log_entry.get("volatility_filter_triggered")),
+                log_entry.get("volatility_state"), _number(log_entry.get("volatility_threshold")),
+                log_entry.get("readiness_status"), _json(readiness), log_entry.get("model_id"),
+            ),
+        )
 
     def get_run(self, run_id):
         with connect_database(self.path) as connection:
@@ -208,11 +207,9 @@ class RunRepository:
         return result
 
     def import_legacy_csv(self, source_path, dry_run=False):
-        source = Path(source_path)
-        payload = source.read_bytes()
-        fingerprint = hashlib.sha256(payload).hexdigest()
-        with source.open(newline="", encoding="utf-8") as stream:
-            rows = list(csv.DictReader(stream))
+        from .history_csv import read_legacy_csv
+
+        source, fingerprint, rows = read_legacy_csv(source_path)
         if dry_run:
             return {"dry_run": True, "fingerprint": fingerprint, "rows": len(rows), "imported": 0}
         with connect_database(self.path) as connection:
@@ -246,15 +243,9 @@ class RunRepository:
         return {"dry_run": False, "fingerprint": fingerprint, "rows": len(rows), "imported": len(rows)}
 
     def export_predictions_csv(self, destination):
-        rows = self.list_predictions(limit=1_000_000)
-        destination = Path(destination)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        fields = ["ticker", "timestamp", "date", "direction", "probability_up", "confidence", "atr_pct", "volatility_filter_triggered", "volatility_state", "volatility_threshold", "model_id", "readiness_status"]
-        with destination.open("w", newline="", encoding="utf-8") as stream:
-            writer = csv.DictWriter(stream, fieldnames=fields)
-            writer.writeheader()
-            writer.writerows([{key: row.get(key) for key in fields} for row in rows])
-        return len(rows)
+        from .history_csv import write_history_csv
+
+        return write_history_csv(destination, self.list_predictions(limit=1_000_000))
 
     def enqueue_notification(self, run_id, recipients, payload):
         notification_id = str(uuid4())

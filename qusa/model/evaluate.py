@@ -8,6 +8,7 @@ import logging
 import joblib
 import os
 import pandas as pd
+from qusa.model.probability import probability_of_up
 
 from sklearn.metrics import (
     accuracy_score,
@@ -108,7 +109,7 @@ class ModelEvaluator:
 
         # predict
         y_pred = self.model.predict(X)
-        y_prob = _probability_of_up(self.model, X)
+        y_prob = probability_of_up(self.model, X)
 
         # calculate metrics
         metrics = self._calculate_metrics(y_target, y_pred, y_prob)
@@ -255,13 +256,3 @@ def evaluate_model(model_path, eval_data_path):
     logger.info("=" * 80)
 
     return metrics
-
-
-def _probability_of_up(model, features):
-    """Return class-one probabilities for normal and legacy model bundles."""
-
-    probabilities = model.predict_proba(features)
-    classes = list(getattr(model, "classes_", []))
-    if 1 not in classes:
-        return pd.Series(0.0, index=features.index).to_numpy()
-    return probabilities[:, classes.index(1)]
