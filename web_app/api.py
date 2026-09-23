@@ -8,11 +8,13 @@ from flask import Blueprint, current_app, jsonify, request
 from qusa.utils.config import load_config
 from qusa.storage.locks import TickerBusyError
 from qusa.storage.runs import RunRepository
+from qusa.utils.errors import safe_error
+from qusa.data.sessions import NyseSessionCalendar, SessionCalendarUnavailableError
 
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG_PATH = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
+DEFAULT_CONFIG_PATH = None
 
 
 def _json_safe(value):
@@ -33,11 +35,6 @@ def _json_safe(value):
     return value
 
 
-_SENSITIVE_QUERY_VALUE = re.compile(
-    r"(?i)(api[_-]?key|token|secret|password)=([^&\s]+)"
-)
-
-
 class RequestValidationError(ValueError):
     """A request error that is safe to return to an API caller."""
 
@@ -49,12 +46,8 @@ def _error_response(message, status_code=400, code=None):
     return jsonify(payload), status_code
 
 
-def _redact_sensitive_text(value):
-    return _SENSITIVE_QUERY_VALUE.sub(r"\1=[REDACTED]", str(value))
-
-
 def _service_error_response(operation, exc):
-    current_app.logger.error("%s failed: %s", operation, _redact_sensitive_text(exc))
+    current_app.logger.error("%s failed: %s", operation, safe_error(exc))
     return _error_response(
         f"{operation} could not be completed.", 500, f"{operation}_failed"
     )
@@ -158,13 +151,14 @@ def run_prediction():
             volatility_override=volatility_override,
             config_path=DEFAULT_CONFIG_PATH,
         )
+        result["freshness"] = _current_freshness(result["prediction"].get("date"))
         return jsonify(_json_safe(result))
     except RequestValidationError as exc:
         return _error_response(str(exc), 400, "invalid_request")
     except TickerBusyError:
         return _error_response("Ticker is currently busy. Try again shortly.", 409, "ticker_busy")
     except FileNotFoundError as exc:
-        current_app.logger.warning("prediction artifact missing: %s", _redact_sensitive_text(exc))
+        current_app.logger.warning("prediction artifact missing: %s", safe_error(exc))
         return _error_response(
             "Required prediction artifact was not found.", 404, "artifact_not_found"
         )
@@ -203,9 +197,19 @@ def latest_prediction():
     try:
         ticker = request.args.get("ticker", "").strip().upper()
         prediction = _prediction_repository().latest_prediction(ticker=ticker or None)
+        if prediction:
+            prediction["freshness"] = _current_freshness(prediction.get("date"))
         return jsonify({"success": True, "prediction": _json_safe(prediction)})
     except Exception as exc:
         return _service_error_response("latest_prediction", exc)
+
+
+def _current_freshness(feature_date):
+    try:
+        return NyseSessionCalendar().readiness_for_bar(feature_date)
+    except SessionCalendarUnavailableError:
+        return {"status": "unavailable", "feature_as_of": feature_date,
+                "target_session": None, "expected_session": None}
 
 
 @api_bp.route("/runs/<run_id>", methods=["GET"])

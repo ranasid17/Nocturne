@@ -413,7 +413,7 @@ def main():
 
     try:
         logger.info("Loading configuration...")
-        config = load_config(PROJECT_ROOT / "qusa" / "utils" / "config.yaml")
+        config = load_config()
         data_cfg = config["data"]
         paths = data_cfg["paths"]
         logger.info("✓ Configuration loaded")

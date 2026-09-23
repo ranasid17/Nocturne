@@ -29,6 +29,7 @@ from qusa.model import (
     train_model,
 )
 from qusa.utils.config import load_config
+from qusa.utils.errors import safe_error
 from qusa.utils.logger import setup_logger
 from qusa.utils.formatting import format_header, format_box
 from qusa.model.train import validate_training_config
@@ -366,7 +367,7 @@ def main():
     tickers = [t.upper() for t in args.tickers]
 
     try:
-        config_path = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
+        config_path = None
         config = load_config(config_path)
         logger = setup_logger(
             "pipeline_orchestrator",
@@ -413,7 +414,7 @@ def main():
                 logger.warning("Pipeline completed with failed phases for %s (run %s)", ticker, workflow["run_id"])
 
         except Exception as exc:
-            logger.error(f"Pipeline failed for {ticker}: {exc}", exc_info=True)
+            logger.error("Pipeline failed for %s: %s", ticker, safe_error(exc))
             continue
 
     for line in format_header(f"MODEL PIPELINE COMPLETE: {success_count}/{len(tickers)} SUCCESSFUL").split("\n"):

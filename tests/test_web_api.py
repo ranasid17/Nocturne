@@ -137,7 +137,8 @@ def test_history_filter_order_limit_and_nulls(client, monkeypatch, tmp_path):
     run_ids = []
     for stamp in pd.date_range("2026-01-01", periods=55):
         run = repository.create_run("prediction", "UPRO")
-        repository.record_prediction(run["id"], {"ticker": "UPRO", "timestamp": str(stamp), "probability_up": None})
+        repository.transition_run(run["id"], "running")
+        repository.complete_prediction(run["id"], {"ticker": "UPRO", "timestamp": str(stamp), "probability_up": None})
         run_ids.append(run["id"])
     monkeypatch.setattr(api, "_prediction_repository", lambda: repository)
     response = client.get("/api/predictions/history?ticker=upro")

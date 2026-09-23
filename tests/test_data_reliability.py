@@ -43,7 +43,22 @@ def test_nyse_readiness_marks_an_older_feature_bar_stale():
 
     assert readiness["status"] == "stale"
     assert readiness["expected_session"] == "2026-03-09"
-    assert readiness["target_session"] == "2026-03-10"
+    assert readiness["target_session"] == "2026-03-09"
+
+
+def test_nyse_readiness_rolls_over_after_close_without_changing_forecast_target():
+    calendar = NyseSessionCalendar()
+    before = calendar.readiness_for_bar(
+        "2026-03-06", datetime(2026, 3, 9, 15, 0, tzinfo=EASTERN)
+    )
+    after = calendar.readiness_for_bar(
+        "2026-03-06", datetime(2026, 3, 9, 17, 0, tzinfo=EASTERN)
+    )
+    assert before["status"] == "ready"
+    assert after["status"] == "stale"
+    assert before["target_session"] == after["target_session"] == "2026-03-09"
+    assert calendar.readiness_for_bar(None, datetime(2026, 3, 9, 17, 0, tzinfo=EASTERN))["status"] == "unavailable"
+    assert calendar.readiness_for_bar("Unknown", datetime(2026, 3, 9, 17, 0, tzinfo=EASTERN))["target_session"] is None
 
 
 def test_local_history_consolidation_never_requires_a_provider_key(monkeypatch, tmp_path):

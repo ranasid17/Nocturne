@@ -49,7 +49,7 @@ def main():
         logger.info(line)
     
     try:
-        config = load_config(PROJECT_ROOT / "qusa" / "utils" / "config.yaml")
+        config = load_config()
         raw_data_dir = Path(config["data"]["paths"]["raw_data_dir"]).expanduser()
     except Exception as e:
         logger.error(f"Error loading config: {e}")

@@ -9,6 +9,7 @@ import pandas as pd
 
 from qusa.data.fetcher import PolygonFetcher
 from qusa.storage.artifacts import atomic_write_csv
+from qusa.utils.errors import safe_error
 
 
 REQUIRED_OHLCV_COLUMNS = ("date", "open", "high", "low", "close", "volume")
@@ -82,7 +83,7 @@ class DataLoader:
                 history["_source"] = history_path.name
                 frames.append(history)
             except Exception as exc:
-                self.logger.error("Could not read canonical history %s: %s", history_path, exc)
+                self.logger.error("Could not read canonical history %s: %s", history_path, safe_error(exc))
                 skipped_files.append(str(history_path))
 
         valid_source_paths = []
@@ -94,7 +95,7 @@ class DataLoader:
                 frames.append(source)
                 valid_source_paths.append(source_path)
             except Exception as exc:
-                self.logger.warning("Could not read source file %s: %s", source_path, exc)
+                self.logger.warning("Could not read source file %s: %s", source_path, safe_error(exc))
                 skipped_files.append(str(source_path))
 
         if not frames:
@@ -118,7 +119,7 @@ class DataLoader:
                 try:
                     shutil.move(source_path, destination)
                 except Exception as exc:
-                    self.logger.warning("Could not archive source file %s: %s", source_path, exc)
+                    self.logger.warning("Could not archive source file %s: %s", source_path, safe_error(exc))
 
         return consolidated, skipped_files
 

@@ -113,8 +113,8 @@ class StrategyReporter:
 
             return result.get("response", "")
 
-        except Exception as e:
-            return f"[LLM Error: {str(e)}]"
+        except Exception as exc:
+            raise RuntimeError("Report service could not complete the request.") from exc
 
     def generate_backtest_report(
         self, ticker, metrics, backtest_results=None, save=None, output_filename=None, mc_summary=None, cluster_summary=None

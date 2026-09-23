@@ -41,7 +41,7 @@ const assert = require('node:assert/strict');
       assert.deepEqual(route.request().postDataJSON(), { ticker: 'UPRO', fetch_latest: true, volatility: 2.5 });
       await predictionGate;
       await route.fulfill({ json: { success: true, ticker: 'UPRO', volatility_filter: { enabled: true },
-        prediction: { date: '2026-05-22T00:00:00', direction: 'UP', confidence: 'HIGH', probability_up: 0.72, volatility_filter_triggered: false } } });
+        prediction: { date: '2026-05-22T00:00:00', direction: 'UP', confidence: 'HIGH', probability_up: 0.72, volatility_filter_triggered: false, volatility_state: 'pass' } } });
     });
     await page.locator('#volatility').press('Enter');
     assert(await page.locator('#pipeline-button').isDisabled());

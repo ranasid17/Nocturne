@@ -6,7 +6,6 @@ Backtest overnight delta prediction model.
 
 import logging
 import joblib
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
@@ -276,6 +275,12 @@ class ModelBacktester:
         return
 
     def plot_results(self, save_path):
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+        except ImportError as exc:
+            raise RuntimeError("Plotting requires nocturne-qusa[research].") from exc
         """
         Plot comprehensive backtest results: Equity Curve, Drawdown, and Trade Distribution.
 

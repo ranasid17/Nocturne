@@ -10,7 +10,7 @@ from qusa.utils.formatting import format_box, format_header
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG_PATH = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
+DEFAULT_CONFIG_PATH = None
 
 
 def _build_feature_pipeline(config):
@@ -56,17 +56,17 @@ def log_mc_feature_validation(fe_pipeline, processed_data, logger):
 
 
 def run_feature_pipeline(
-    ticker, fetch_latest=False, config_path=None, logger=None, _lock_held=False
+    ticker, fetch_latest=False, config_path=None, logger=None, _lock_held=False, _config=None
 ):
     """
     Run feature engineering for one ticker and return structured metadata.
     """
 
     ticker = ticker.upper()
-    config_path = Path(config_path or DEFAULT_CONFIG_PATH)
+    config = _config if _config is not None else load_config(config_path)
 
     if not _lock_held:
-        lock_config = load_config(config_path)
+        lock_config = config
         lock_root = Path(lock_config["data"]["paths"]["raw_data_dir"]).expanduser()
         timeout = lock_config.get("coordination", {}).get("lock_timeout_seconds", 5.0)
         with ticker_lock(lock_root, ticker, timeout_seconds=float(timeout)):
@@ -76,14 +76,13 @@ def run_feature_pipeline(
                 config_path=config_path,
                 logger=logger,
                 _lock_held=True,
+                _config=config,
             )
 
     if logger:
         for line in format_header("Starting Nocturne Feature Pipeline").split("\n"):
             logger.info(line)
         logger.info("Loading configuration file...")
-
-    config = load_config(config_path)
 
     if logger:
         logger.info("✓ Configuration loaded successfully")

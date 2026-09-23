@@ -7,6 +7,7 @@ const runStatus = document.querySelector("#run-status");
 const historyStatus = document.querySelector("#history-status");
 const historyBody = document.querySelector("#history-body");
 let historyRequest = 0;
+let latestRequest = 0;
 let running = false;
 
 const display = (value) => value === null || value === undefined || value === "" ? "--" : String(value);
@@ -75,7 +76,7 @@ function clearResult() {
   document.querySelector("#result-ticker").textContent = "";
 }
 
-function showPrediction(data, selectedTicker, source = "Current session") {
+function showPrediction(data, selectedTicker, source = "New result") {
   const result = data.prediction || data;
   if (!result || typeof result !== "object") throw new Error("Invalid prediction response.");
   document.querySelector("#result-direction").textContent = display(result.direction);
@@ -86,14 +87,15 @@ function showPrediction(data, selectedTicker, source = "Current session") {
   const atr = result.atr_pct;
   const limit = result.volatility_threshold ?? data.volatility_filter?.max_atr_pct;
   document.querySelector("#result-atr").textContent = `${display(atr)}${atr === null || atr === undefined ? "" : "%"} / ${display(limit)}${limit === null || limit === undefined ? "" : "%"}`;
-  const volatilityLabels = {disabled: "Disabled", pass: "Within limit", blocked: "Triggered", unavailable: "Unavailable"};
+  const volatilityLabels = {disabled: "Disabled", pass: "Within limit", blocked: "Triggered", unavailable: "Unavailable", unknown: "Unknown"};
   const risk = volatilityLabels[result.volatility_state] ||
-    (result.volatility_filter_triggered ? "Triggered" : data.volatility_filter?.enabled ? "Within limit" : "Disabled");
+    (result.volatility_filter_triggered === true ? "Triggered" : "Unknown");
   document.querySelector("#result-filter").textContent = risk;
   document.querySelector("#result-filter").className = risk === "Within limit" ? "up" : risk === "Triggered" || risk === "Unavailable" ? "down" : "";
   const readiness = result.readiness || data.readiness || {};
   document.querySelector("#result-target-session").textContent = display(readiness.target_session);
   document.querySelector("#result-readiness").textContent = display(result.readiness_status || readiness.status);
+  document.querySelector("#result-freshness").textContent = display((result.freshness || data.freshness || {}).status || "unavailable");
   document.querySelector("#result-model").textContent = display(result.model_id);
   document.querySelector("#result-ticker").textContent = data.ticker || selectedTicker;
   document.querySelector("#result-source").textContent = source;
@@ -102,17 +104,18 @@ function showPrediction(data, selectedTicker, source = "Current session") {
 }
 
 async function loadLatest() {
+  const version = ++latestRequest;
   const selectedTicker = ticker();
   if (!selectedTicker) return clearResult();
   try {
     const url = new URL(form.dataset.latestUrl, window.location.origin);
     url.searchParams.set("ticker", selectedTicker);
     const data = await requestJSON(url);
-    if (ticker() !== selectedTicker) return;
+    if (version !== latestRequest || ticker() !== selectedTicker || running) return;
     if (data.prediction) showPrediction(data.prediction, selectedTicker, "Saved latest result");
     else clearResult();
   } catch (error) {
-    if (ticker() === selectedTicker) clearResult();
+    if (version === latestRequest && ticker() === selectedTicker && !running) clearResult();
   }
 }
 
@@ -124,6 +127,8 @@ async function run(kind) {
   const volatility = document.querySelector("#volatility").value;
   if (kind === "prediction" && volatility !== "") payload.volatility = Number(volatility);
   running = true;
+  ++latestRequest;
+  clearTimeout(tickerTimer);
   controls.disabled = true;
   form.setAttribute("aria-busy", "true");
   if (kind === "prediction") clearResult();
@@ -157,6 +162,7 @@ document.querySelector("#refresh-history").addEventListener("click", loadHistory
 let tickerTimer;
 tickerInput.addEventListener("input", () => {
   ++historyRequest;
+  ++latestRequest;
   historyBody.replaceChildren();
   document.querySelector("#history-count").textContent = "";
   historyStatus.textContent = "Loading history...";

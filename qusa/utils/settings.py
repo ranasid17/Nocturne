@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG_PATH = PROJECT_ROOT / "qusa" / "utils" / "config.yaml"
+DEFAULT_CONFIG_PATH = Path(__file__).with_name("defaults.yaml")
 
 
 class SettingsError(ValueError):
@@ -27,10 +27,11 @@ def load_settings(config_path=None, environ=None, project_root=None):
     """Load YAML settings without changing the caller's working directory."""
 
     environment = environ if environ is not None else os.environ
-    root = Path(project_root or PROJECT_ROOT)
+    root = Path(project_root or Path.cwd())
+    load_dotenv(Path.cwd() / ".env", override=False)
     load_dotenv(root / ".env", override=False)
     selected_path = Path(
-        config_path or environment.get("QUSA_CONFIG_PATH", root / "qusa" / "utils" / "config.yaml")
+        config_path or environment.get("QUSA_CONFIG_PATH") or DEFAULT_CONFIG_PATH
     ).expanduser()
     if not selected_path.exists():
         raise SettingsError(f"Configuration file does not exist: {selected_path}")
@@ -41,6 +42,7 @@ def load_settings(config_path=None, environ=None, project_root=None):
         raise SettingsError("Configuration root must be an object.")
 
     config = copy.deepcopy(config)
+    path_root = Path.cwd() if selected_path.resolve() == DEFAULT_CONFIG_PATH.resolve() else selected_path.resolve().parent
     data_root = environment.get("QUSA_DATA_ROOT")
     if data_root:
         paths = config.setdefault("data", {}).setdefault("paths", {})
@@ -63,10 +65,10 @@ def load_settings(config_path=None, environ=None, project_root=None):
     ]
     for section in path_sections:
         for key, value in list(section.items()):
-            if isinstance(value, str) and (key.endswith("_path") or key.endswith("_dir")):
-                section[key] = _resolve_path(value, selected_path.parent)
+            if isinstance(value, str) and (key.endswith("_path") or key.endswith("_dir") or key in {"log_file", "csv_log"}):
+                section[key] = _resolve_path(value, path_root)
     if environment.get("QUSA_DATABASE_PATH"):
         config.setdefault("storage", {})["database_path"] = _resolve_path(
-            environment["QUSA_DATABASE_PATH"], selected_path.parent
+            environment["QUSA_DATABASE_PATH"], path_root
         )
     return config

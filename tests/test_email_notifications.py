@@ -148,7 +148,7 @@ def test_send_prediction_email_returns_error_on_smtp_failure(monkeypatch):
 
     assert result["sent"] is False
     assert result["recipients"] == ["desk@example.com"]
-    assert "network down" in result["error"]
+    assert result["error"] == "Operation failed; check configuration and required resources."
 
 
 def test_send_prediction_email_reports_missing_env(monkeypatch):
@@ -163,5 +163,4 @@ def test_send_prediction_email_reports_missing_env(monkeypatch):
     )
 
     assert result["sent"] is False
-    assert "QUSA_SMTP_USER" in result["error"]
-    assert "QUSA_SMTP_PASSWORD" in result["error"]
+    assert result["error"] == "Input or configuration was invalid."

@@ -1,11 +1,15 @@
 """Importable training, evaluation, and backtest workflow services."""
 
 from pathlib import Path
+import shutil
 
 from qusa.model.backtest import ModelBacktester
 from qusa.model.evaluate import evaluate_model
 from qusa.model.train import train_model, validate_training_config
 from qusa.storage.runs import RunRepository
+from qusa.storage.locks import ticker_lock
+from qusa.services.research_outputs import generate_reports, json_value, save_numerical_outputs
+from qusa.utils.errors import safe_error
 
 
 def _model_config(config):
@@ -24,10 +28,15 @@ def _model_config(config):
     })
 
 
-def run_model_workflow(ticker, config, volatility_override=None, logger=None, repository=None):
+def run_model_workflow(ticker, config, volatility_override=None, logger=None, repository=None, _lock_held=False):
     """Run enabled research phases and return their structured outcomes."""
 
     ticker = ticker.upper()
+    if not _lock_held:
+        data_paths = config["data"]["paths"]
+        lock_root = data_paths.get("raw_data_dir", data_paths["processed_data_dir"])
+        with ticker_lock(lock_root, ticker):
+            return run_model_workflow(ticker, config, volatility_override, logger, repository, _lock_held=True)
     paths = {
         "data": Path(config["data"]["paths"]["processed_data_dir"]),
         "models": Path(config["model"]["output"]["model_output_path"]),
@@ -45,6 +54,9 @@ def run_model_workflow(ticker, config, volatility_override=None, logger=None, re
     result = {"run_id": run["id"], "ticker": ticker, "success": False, "phases": {}}
     data_path = paths["data"] / f"{ticker}_processed.csv"
     model_path = paths["models"] / f"{ticker.lower()}_model.pkl"
+    snapshot_path = paths["models"] / ticker.lower() / run["id"] / "model.pkl"
+    output_dir = paths["figures"] / ticker.lower() / run["id"]
+    backtester = None
     pipeline = config.get("pipeline", {})
 
     try:
@@ -53,11 +65,24 @@ def run_model_workflow(ticker, config, volatility_override=None, logger=None, re
         elif not data_path.exists():
             result["phases"]["training"] = {"status": "failed", "error": "Processed data is missing."}
         else:
-            model = train_model(str(data_path), str(model_path), _model_config(config))
+            model = train_model(str(data_path), str(snapshot_path), _model_config(config))
             metrics = getattr(model, "metrics", {})
-            repository.record_model(model_path.name, model_path, {"training_metrics": metrics})
-            repository.record_artifact(run["id"], "model", model_path)
+            repository.record_model(model.model_id, snapshot_path, {"training_metrics": metrics})
+            repository.record_artifact(run["id"], "model", snapshot_path)
+            temporary = model_path.with_suffix(f".{run['id']}.tmp")
+            try:
+                shutil.copyfile(snapshot_path, temporary)
+                temporary.replace(model_path)
+            finally:
+                temporary.unlink(missing_ok=True)
+            model_path = snapshot_path
             result["phases"]["training"] = {"status": "succeeded", "metrics": metrics}
+
+        if model_path.exists() and model_path != snapshot_path:
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(model_path, snapshot_path)
+            model_path = snapshot_path
+            repository.record_artifact(run["id"], "model", snapshot_path)
 
         if pipeline.get("skip_evaluation", False):
             result["phases"]["evaluation"] = {"status": "skipped"}
@@ -85,9 +110,16 @@ def run_model_workflow(ticker, config, volatility_override=None, logger=None, re
                 result["phases"]["backtest"] = {"status": "succeeded", "metrics": backtester.calculate_metrics(backtest["initial_capital"])}
 
         failures = [phase for phase in result["phases"].values() if phase["status"] == "failed"]
+        if result["phases"]["backtest"]["status"] != "succeeded":
+            backtester = None
+        save_numerical_outputs(result, config, output_dir, repository, backtester)
+        result["reports"] = generate_reports(result, config, model_path, repository, backtester)
         result["success"] = not failures
+        repository.update_metadata(run["id"], json_value(result))
         repository.transition_run(run["id"], "succeeded" if result["success"] else "failed", error_message=failures[0].get("error") if failures else None)
-        return result
+        return json_value(result)
     except Exception as exc:
+        result["error"] = safe_error(exc)
+        repository.update_metadata(run["id"], json_value(result))
         repository.transition_run(run["id"], "failed", error_message=exc)
         raise

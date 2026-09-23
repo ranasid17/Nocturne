@@ -8,6 +8,7 @@ import smtplib
 
 from datetime import datetime
 from email.message import EmailMessage
+from qusa.utils.errors import safe_error
 
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -306,5 +307,5 @@ def send_prediction_email(email_config, recipients, prediction, ticker):
         return result
 
     except Exception as exc:
-        result["error"] = str(exc)
+        result["error"] = safe_error(exc)
         return result

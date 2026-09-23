@@ -77,12 +77,19 @@ class NyseSessionCalendar:
                 "target_session": None,
                 "expected_session": None,
             }
-        observed = pd.Timestamp(bar_date).date().isoformat() if bar_date is not None else None
+        try:
+            parsed = pd.Timestamp(bar_date)
+            observed = None if pd.isna(parsed) else parsed.date().isoformat()
+        except (ValueError, TypeError):
+            observed = None
+        if observed is None:
+            return {"status": "unavailable", "feature_as_of": None,
+                    "target_session": None, "expected_session": latest["date"]}
         if observed != latest["date"]:
             return {
                 "status": "stale",
                 "feature_as_of": observed,
-                "target_session": self.next_session_after(latest["date"]),
+                "target_session": self.next_session_after(observed),
                 "expected_session": latest["date"],
             }
         return {

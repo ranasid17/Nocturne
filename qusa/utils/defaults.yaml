@@ -1,0 +1,87 @@
+# Portable defaults. Relative paths are rooted in the working directory.
+data:
+  start_date: '2023-12-01'
+  end_date: '2025-12-01'
+  paths:
+    raw_data_dir: data/raw
+    processed_data_dir: data/processed
+    figures_dir: data/figures
+    predictions_dir: data/predictions
+    reports_dir: data/reports
+features:
+  rsi_window: 14
+  atr_window: 14
+  volume_ma_window: 20
+  rolling_window_52w: 252
+  vwap_window: 20
+  vol_regime_short_window: 5
+  vol_regime_long_window: 20
+  advanced_vol_window: 20
+analysis:
+  abnormal_threshold: 2.0
+  minimum_event_occurrences: 20
+  strong_lift: 1.5
+  moderate_lift: 1.2
+model:
+  output:
+    model_output_path: saved_models
+  parameters:
+    max_depth: 5
+    min_samples_leaf: 10
+    min_samples_split: 20
+    class_weight: balanced
+    random_state: 0
+    test_size: 0.25
+    cv: 5
+    probability_threshold: 0.7
+evaluation:
+  save_results: true
+prediction:
+  save: true
+email:
+  enabled: false
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
+  use_tls: true
+  smtp_user_env: QUSA_SMTP_USER
+  smtp_password_env: QUSA_SMTP_PASSWORD
+  from_email: ''
+backtest:
+  initial_capital: 10000
+  position_size: 0.95
+  transaction_cost: 0.05
+  save_results: true
+  save_plots: false
+  volatility_filter:
+    enabled: true
+    max_atr_pct: 3.0
+clustering:
+  save_plots: false
+reporting:
+  enabled: false
+  llm:
+    model: gemma4:e4b
+    base_url: http://localhost:11434
+    temperature: 0.3
+    max_tokens: 1000
+    max_context_rows: 10
+  enabled_report_types: [backtest, evaluation, training, interpretation]
+interpretation:
+  save_results: true
+defaults:
+  reporter:
+    save: true
+pipeline:
+  skip_fe: false
+  skip_clustering: false
+  skip_training: false
+  skip_evaluation: false
+  skip_backtest: false
+monte_carlo:
+  enabled: true
+  window_size: 252
+  iterations: 1000
+  random_seed: 42
+  min_data_threshold: 252
+  horizons: [1]
+  features: [mc_1d_q1, mc_1d_q5, mc_1d_q10, mc_1d_q50, mc_1d_q95, mc_1d_return_pct, mc_1d_prob_breakeven]

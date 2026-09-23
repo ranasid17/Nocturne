@@ -24,6 +24,9 @@ dependencies = [
 research = ["matplotlib", "ollama"]
 test = ["pytest", "pytest-cov"]
 
+[project.scripts]
+nocturne = "qusa.cli:main"
+
 [tool.setuptools]
 py-modules = ["app"]
 
@@ -31,4 +34,5 @@ py-modules = ["app"]
 include = ["qusa*", "web_app*"]
 
 [tool.setuptools.package-data]
+"qusa.utils" = ["defaults.yaml"]
 web_app = ["templates/*.html", "static/css/*.css", "static/js/*.js", "static/icons/*.svg", "static/icons/LICENSE"]

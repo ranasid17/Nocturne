@@ -63,10 +63,10 @@ cd Nocturne
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install .
 ```
 
-For an installable application package, use `python -m pip install .`. Add `[research]` only for the legacy exploratory dashboards, plotting, or local LLM reporting; prediction and the Flask dashboard do not need those optional packages.
+Install `python -m pip install '.[research,test]'` for plotting and the test suite. Prediction and the Flask dashboard do not require these extras.
 
 On Windows PowerShell, create it with `py -3 -m venv .venv` and activate with `.venv\Scripts\Activate.ps1`, then run the same pip commands. Run all commands below from the repository root with this environment active.
 
@@ -78,10 +78,10 @@ cp .env.example .env
 
 On PowerShell use `Copy-Item .env.example .env`. Do not overwrite an existing `.env`. Edit the new file to set `POLYGON_API_KEY`. Flask loads it at startup; CLI workflows load it when reading configuration. Existing exported environment variables take precedence. `.env` is ignored by Git; `.env.example` contains no credentials.
 
-`QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are optional defaults for dashboard email notifications. You can also enter the SMTP username and password directly in the dashboard for the current Streamlit session. For Gmail, use an app password rather than your normal account password.
+`QUSA_SMTP_USER` and `QUSA_SMTP_PASSWORD` are optional credentials for the explicit notification worker. Opening the Flask dashboard never sends email.
 
 4. **Configure the project**:
-Keep `qusa/utils/config.yaml` unchanged unless you intentionally maintain a local override. Set `QUSA_DATA_ROOT` to put raw, processed, figure, prediction, and report files beneath one portable directory:
+Configuration precedence is an explicit CLI/service path, then `QUSA_CONFIG_PATH`, then packaged `qusa/utils/defaults.yaml`. Packaged relative paths use your working directory; custom YAML paths use that file's directory. Nothing writes into site-packages. Your existing `qusa/utils/config.yaml` is preserved but is only used when explicitly selected. Set `QUSA_DATA_ROOT` to put raw, processed, figure, prediction, and report files beneath one portable directory:
 
 ```bash
 export QUSA_DATA_ROOT="$PWD/data"
@@ -89,7 +89,9 @@ export QUSA_DATA_ROOT="$PWD/data"
 
 Set `QUSA_CONFIG_PATH` to use a separate YAML file. Set `QUSA_DATABASE_PATH` to place the local SQLite run history elsewhere; by default it is `data/predictions/qusa.sqlite3` (or the equivalent beneath `QUSA_DATA_ROOT`). Exported values take precedence; neither setting rewrites an existing configuration file.
 
-Set `reporting.enabled: false` unless you have a local Ollama server and the model specified in `reporting.llm.model`. AI reporting is optional; it is not required to serve the Flask dashboard.
+The packaged defaults disable email, LLM reporting, and plots. To keep an existing local setup, export `QUSA_CONFIG_PATH="$PWD/qusa/utils/config.yaml"`. Enable reports only with an available Ollama server; enable `backtest.save_plots` or `clustering.save_plots` after installing the research extra.
+
+The installed CLI works outside the checkout: `nocturne --help`, `nocturne features UPRO`, `nocturne research UPRO`, `nocturne predict UPRO`, and `nocturne cluster UPRO`. Each accepts `--config /path/to/config.yaml`; features/predict accept `--fetch`.
 
 ### Start the Flask Dashboard
 
@@ -106,7 +108,7 @@ The supported Flask workflow is prediction and feature preparation. Training, ev
 A fresh clone has no market data or trained models because generated artifacts are ignored. The page still opens with an empty state. To run predictions, follow the CLI workflow below or supply your own compatible data and trained model:
 
 - Ticker discovery reads `data/raw/{TICKER}_history.csv`.
-- Feature generation writes `data/processed/{TICKER}_processed.csv` and currently requires a Polygon API key even when using local history, because the loader initializes the API client.
+- Feature generation writes `data/processed/{TICKER}_processed.csv`. Local history needs no Polygon API key; fetching new data does.
 - Prediction requires `saved_models/{ticker_lowercase}_model.pkl` and processed data. Training is performed through the CLI, not the Flask page.
 - Prediction runs and history are stored in the local SQLite database. The legacy CSV setting is no longer written during normal operation.
 
@@ -120,7 +122,7 @@ python -m pytest -q
 python -m compileall -q app.py web_app qusa scripts
 ```
 
-With the server running, `curl http://127.0.0.1:5000/health` and `curl http://127.0.0.1:5000/api/health` should return `{"status":"healthy"}`. `/api/tickers` returns a `tickers` list; `/api/predictions/history` returns a `history` list. Both lists may be empty on a new checkout. Tests use temporary data and mocked service calls and do not require live Polygon or Ollama access.
+With the server running, `curl http://127.0.0.1:5000/health` and `curl http://127.0.0.1:5000/api/health` should return `{"status":"healthy"}`. `/api/tickers` returns a `tickers` list; `/api/predictions/history` returns a `history` list. Both lists may be empty on a new checkout. Tests include real synthetic training/inference, Flask routes, SQLite restart/failure checks, and run-scoped research outputs without live external services. See [Sprint 7 verification](docs/sprint7-verification.md) for the clean-wheel and browser procedure.
 
 Optional browser checks use Node.js and Playwright, not application runtime dependencies:
 

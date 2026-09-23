@@ -31,3 +31,57 @@ jobs:
 
       - name: Build wheel
         run: python -m pip wheel --no-deps --wheel-dir dist .
+
+  installed-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist
+
+      - name: Install base wheel outside checkout
+        run: |
+          python -m venv "$RUNNER_TEMP/nocturne-venv"
+          "$RUNNER_TEMP/nocturne-venv/bin/python" -m pip install dist/nocturne_qusa-*.whl
+          "$RUNNER_TEMP/nocturne-venv/bin/python" -m pip check
+          mkdir -p "$RUNNER_TEMP/nocturne-app"
+          cd "$RUNNER_TEMP/nocturne-app"
+          "$RUNNER_TEMP/nocturne-venv/bin/python" "$GITHUB_WORKSPACE/tests/installed_workflow.py" "$PWD" --base-only
+
+      - name: Install browser
+        run: |
+          npm install --prefix "$RUNNER_TEMP/nocturne-browser" --no-save playwright@1.63.0
+          "$RUNNER_TEMP/nocturne-browser/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Verify real browser against installed app
+        run: |
+          cd "$RUNNER_TEMP/nocturne-app"
+          export QUSA_CONFIG_PATH="$PWD/config.yaml"
+          export NODE_PATH="$RUNNER_TEMP/nocturne-browser/node_modules"
+          export SCREENSHOT_DIR="$RUNNER_TEMP/nocturne-screenshots"
+          "$RUNNER_TEMP/nocturne-venv/bin/python" -m flask --app app run --port 5053 > "$RUNNER_TEMP/nocturne-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5053/api/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5053/api/health
+          node "$GITHUB_WORKSPACE/tests/web_installed.cjs" http://127.0.0.1:5053
+
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-app-screenshots
+          path: ${{ runner.temp }}/nocturne-screenshots/
+          if-no-files-found: ignore
