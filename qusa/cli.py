@@ -22,10 +22,10 @@ def main(argv=None):
         else:
             workflow = run_model_workflow if args.operation == "research" else run_clustering_workflow
             result = workflow(args.ticker, load_config(args.config))
-        print(json.dumps(result, default=str))
+        print(json.dumps(result, default=str, indent=2))
         return 0 if result["success"] else 1
     except Exception as exc:
-        print(json.dumps({"success": False, "error": safe_error(exc)}))
+        print(json.dumps({"success": False, "error": safe_error(exc)}, indent=2))
         return 1
 
 
