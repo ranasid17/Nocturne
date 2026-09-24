@@ -1,0 +1,102 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "tests/docs_links.py"
+      - "tests/docs_browser.cjs"
+      - ".github/workflows/docs.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "tests/docs_links.py"
+      - "tests/docs_browser.cjs"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: docs
+      - name: Build Jekyll site
+        working-directory: docs
+        env:
+          JEKYLL_ENV: production
+        run: bundle exec jekyll build --destination "$RUNNER_TEMP/nocturne-site"
+      - name: Check internal links
+        run: python3 tests/docs_links.py "$RUNNER_TEMP/nocturne-site"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/nocturne-browser" --no-save playwright@1.63.0
+          "$RUNNER_TEMP/nocturne-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Check navigation, search, and responsive layout
+        working-directory: docs
+        env:
+          NODE_PATH: ${{ runner.temp }}/nocturne-browser/node_modules
+          SCREENSHOT_DIR: ${{ runner.temp }}/nocturne-docs-screenshots
+        run: |
+          bundle exec jekyll serve --host 127.0.0.1 --port 4001 --baseurl /Nocturne > "$RUNNER_TEMP/nocturne-jekyll.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4001/Nocturne/ > /dev/null; then break; fi
+            sleep 1
+          done
+          node "$GITHUB_WORKSPACE/tests/docs_browser.cjs" http://127.0.0.1:4001/Nocturne/
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-browser-evidence
+          path: |
+            ${{ runner.temp }}/nocturne-docs-screenshots/
+            ${{ runner.temp }}/nocturne-jekyll.log
+          if-no-files-found: ignore
+      - name: Upload built site for review
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-preview
+          path: ${{ runner.temp }}/nocturne-site/
+      - name: Configure GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/nocturne-site/
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy documentation
+        id: deployment
+        uses: actions/deploy-pages@v4

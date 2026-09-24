@@ -1,6 +1,13 @@
+---
+title: Historical refactor plan
+nav_exclude: true
+---
+
 # Nocturne MVP Remediation and Refactor Plan
 
-Status: proposed; implementation has not started.
+Status: historical execution plan. The remediation cycle has been implemented
+through the MVP sprints; use the current [overview]({{ '/' | relative_url }})
+and [operations]({{ '/operations/' | relative_url }}) for supported behavior.
 Date: 2026-09-21.
 
 This plan addresses issues **identified**, not fixed, in the MVP review. It follows the completed Flask conversion. The sprint numbers below refer to this new remediation cycle.
