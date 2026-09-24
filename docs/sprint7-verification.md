@@ -1,3 +1,8 @@
+---
+title: Sprint 7 verification
+nav_exclude: true
+---
+
 # Sprint 7 verification
 
 Issue #93 covers portable installation, prediction integrity, research outputs, and current result freshness. The app uses local SQLite and synchronous Flask requests.

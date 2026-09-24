@@ -1,3 +1,8 @@
+---
+title: Legacy surfaces
+nav_exclude: true
+---
+
 # Legacy Surfaces
 
 The supported runtime is `flask --app app run`, backed by `qusa.services` and the

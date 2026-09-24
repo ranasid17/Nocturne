@@ -28,6 +28,9 @@ jobs:
       - name: Run smoke tests
         run: python -m pytest -q --cov=qusa --cov-fail-under=40
 
+      - name: Rehearse documented SQLite recovery
+        run: python tests/docs_recovery.py
+
       - name: Build wheel
         run: python -m pip wheel --no-deps --wheel-dir dist .
 

@@ -1,4 +1,24 @@
-title: Nocturne Documentation
-description: Local Flask and SQLite operations for the Nocturne signal application.
-markdown: kramdown
-theme: minima
+title: Nocturne
+description: Local research and prediction application documentation
+url: https://ranasid17.github.io
+baseurl: /Nocturne
+theme: just-the-docs
+color_scheme: light
+search_enabled: true
+heading_anchors: true
+permalink: pretty
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - vendor
+  - .bundle
+aux_links:
+  GitHub:
+    - https://github.com/ranasid17/Nocturne
+aux_links_new_tab: true
