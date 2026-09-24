@@ -79,6 +79,5 @@ Keep the original CSV. See [operations](docs/operations.md) for backup, restore,
 
 - [Operations](docs/operations.md)
 - [Sprint 7 verification](docs/sprint7-verification.md)
-- [Historical Flask conversion plan](flask_conversion_execution_plan.md) and [archived roadmap](docs/archive/roadmap.md)
 
 GitHub Pages serves static documentation from `docs/`; it does not run the Flask backend. For installation problems, check the active virtual environment, `QUSA_CONFIG_PATH`, and the configured data/model paths before running `flask --app app run`.

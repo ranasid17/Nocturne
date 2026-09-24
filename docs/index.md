@@ -24,4 +24,4 @@ The screenshot uses generated fixture data and a model trained for the integrati
 - [Operations]({{ '/operations/' | relative_url }}) covers state and recovery.
 - [Troubleshooting]({{ '/troubleshooting/' | relative_url }}) covers common failures.
 
-The Flask server is intended for loopback use and has no authentication. GitHub Pages hosts **these static docs only**; it does not host the application. Watchlists, scheduled jobs, login, email controls, and network deployment are not part of the current MVP. The [archived roadmap]({{ '/archive/roadmap/' | relative_url }}) and [historical refactor plan]({{ '/refactor_execution_plan/' | relative_url }}) describe ideas and past work, not currently available features.
+The Flask server is intended for loopback use and has no authentication. GitHub Pages hosts **these static docs only**; it does not host the application. Watchlists, scheduled jobs, login, email controls, and network deployment are not part of the current MVP.

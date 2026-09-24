@@ -1,6 +1,6 @@
 # Nocturne Contributor Guide
 
-Nocturne is a Python 3.9+ local Flask application with explicit CLI research workflows. [README.md](README.md) is the user setup guide; [docs/operations.md](docs/operations.md) covers backups and restore. The historical roadmap in [docs/archive/roadmap.md](docs/archive/roadmap.md) is archived.
+Nocturne is a Python 3.9+ local Flask application with explicit CLI research workflows. [README.md](README.md) is the user setup guide; [docs/operations.md](docs/operations.md) covers backups and restore.
 
 ## Install And Check
 

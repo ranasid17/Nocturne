@@ -1,8 +1,7 @@
 # Nocturne Docs
 
 This folder is the Jekyll source for the Nocturne GitHub Pages site. The
-[overview](index.md) is the current entry point; the [old roadmap](archive/roadmap.md)
-is historical planning material.
+[overview](index.md) is the current entry point.
 
 With Ruby 3.3 and Bundler installed, run from this directory:
 
