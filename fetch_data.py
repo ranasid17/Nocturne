@@ -5,7 +5,7 @@ from io import StringIO
 print('Fetching Amazon (AMZN) historical data...')
 print('Using Alpha Vantage API (last 100 days)')
 
-API_KEY = 'NML8LIJOVSHIUGIX'
+API_KEY = 'cccx'
 ticker = 'AMZN'
 
 # Use compact size for free tier (last 100 trading days)
