@@ -2,6 +2,7 @@
 
 # data retreival
 requests
+yfinance
 
 # feature engineering 
 numpy 
@@ -16,6 +17,5 @@ scikit-learn
 # modeling
 joblib
 
-# optional (for Monte Carlo visualization only, not required for features)
-# seaborn
-# yfinance
+# Monte Carlo model imports plotting dependencies at module load time
+seaborn

@@ -1,0 +1,115 @@
+{
+  "tickers": [
+    "AAPL",
+    "AMD",
+    "AMZN",
+    "GOOG",
+    "LLY",
+    "NVDA",
+    "SPY",
+    "UPRO",
+    "SPYM"
+  ],
+  "start_date": "2016-10-31",
+  "auto_adjust": true,
+  "horizons": [
+    7,
+    14,
+    30,
+    40,
+    45
+  ],
+  "vol_windows": [
+    20,
+    60,
+    252,
+    null
+  ],
+  "selection_start": "2018-01-01",
+  "selection_end": "2019-12-31",
+  "validation_periods": {
+    "2020-2021": [
+      "2020-01-01",
+      "2021-12-31"
+    ],
+    "2022-present": [
+      "2022-01-01",
+      null
+    ]
+  },
+  "iterations": 2000,
+  "min_train": 253,
+  "n_origins": 1000,
+  "seed": 42,
+  "show_selection": true,
+  "show_validation": true,
+  "show_current_forecast": false,
+  "show_recent_backtest": false,
+  "forecast_output_path": "forecast_ledger.csv",
+  "selected_windows_by_ticker": {
+    "AAPL": {
+      "7": 20,
+      "14": 252,
+      "30": 252,
+      "40": 252,
+      "45": 252
+    },
+    "AMD": {
+      "7": null,
+      "14": null,
+      "30": null,
+      "40": 252,
+      "45": null
+    },
+    "AMZN": {
+      "7": 252,
+      "14": 252,
+      "30": null,
+      "40": null,
+      "45": null
+    },
+    "GOOG": {
+      "7": 60,
+      "14": 252,
+      "30": null,
+      "40": 20,
+      "45": 252
+    },
+    "LLY": {
+      "7": 60,
+      "14": null,
+      "30": null,
+      "40": null,
+      "45": null
+    },
+    "NVDA": {
+      "7": 252,
+      "14": 252,
+      "30": 252,
+      "40": 252,
+      "45": 252
+    },
+    "SPY": {
+      "7": 252,
+      "14": 60,
+      "30": 252,
+      "40": 252,
+      "45": 252
+    },
+    "UPRO": {
+      "7": 252,
+      "14": 252,
+      "30": 252,
+      "40": 252,
+      "45": 252
+    },
+    "SPYM": {
+      "7": 252,
+      "14": 60,
+      "30": 252,
+      "40": 252,
+      "45": 252
+    }
+  },
+  "calibrated_at_utc": "2026-11-11T03:17:31.133707+00:00"
+}
