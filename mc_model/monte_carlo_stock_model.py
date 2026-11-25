@@ -854,7 +854,7 @@ def run_multi_ticker_decision_workflow(
 # %%
 def main():
     config = {
-        "tickers": ["AAPL", "AMD", "AMZN", "GOOG","LLY", "NVDA", "SPY", "UPRO"],
+        "tickers": ["AAPL", "AMD", "AMZN", "GOOG","LLY", "NVDA", "SPY", "UPRO", "SPYM", "SCHD"],
         "start_date": "2016-10-31",
         "horizons": [7, 14, 30, 40, 45],
         "vol_windows": [20, 60, 252, None],
